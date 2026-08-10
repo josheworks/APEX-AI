@@ -5,6 +5,9 @@ import platform
 import subprocess
 import webbrowser
 import urllib.parse
+import urllib.request
+import re
+import html
 from datetime import datetime
 from google.genai import types
 
@@ -91,15 +94,62 @@ def open_website(site: str) -> dict:
             "error": f"Website '{site}' is not in the allowed list. Allowed sites: {allowed_list}."
         }
 
+def _live_web_search(query: str) -> str:
+    """Performs a lightweight browserless public web search and extracts result snippets."""
+    if not query or not query.strip():
+        raise ValueError("Search query cannot be empty.")
+
+    clean_query = query.strip()
+    search_url = "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(clean_query)
+
+    request = urllib.request.Request(
+        search_url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; APEX-AI/1.0; +https://example.invalid)"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:
+            page = response.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        raise RuntimeError(f"Live web search request failed: {str(e)}")
+
+    titles = re.findall(r'class="result__a"[^>]*>(.*?)</a>', page, re.IGNORECASE | re.DOTALL)
+    snippets = re.findall(r'class="result__snippet"[^>]*>(.*?)</div>', page, re.IGNORECASE | re.DOTALL)
+
+    if not titles:
+        return "I could not fetch live web search results right now."
+
+    summaries = []
+    for i, title in enumerate(titles[:3]):
+        clean_title = html.unescape(re.sub(r'<[^>]+>', '', title)).strip()
+        clean_snippet = ""
+        if i < len(snippets):
+            clean_snippet = html.unescape(re.sub(r'<[^>]+>', '', snippets[i])).strip()
+        if clean_snippet:
+            summaries.append(f"{clean_title} — {clean_snippet}")
+        else:
+            summaries.append(clean_title)
+
+    return "\n".join(summaries)
+
+
 def web_search(query: str) -> dict:
-    """Opens a Google web search for query."""
+    """Performs a live browserless web search for the provided query."""
     if not query or not query.strip():
         return {"success": False, "error": "Search query cannot be empty."}
 
     clean_query = query.strip()
-    search_url = f"https://www.google.com/search?q={urllib.parse.quote(clean_query)}"
-    webbrowser.open(search_url)
-    return {"success": True, "result": f"Opened web search for '{clean_query}' in your browser."}
+
+    try:
+        result = _live_web_search(clean_query)
+        return {
+            "success": True,
+            "result": f"Here are current search results for '{clean_query}':\n{result}"
+        }
+    except Exception as e:
+        return {"success": False, "error": f"Live web search failed: {str(e)}"}
 
 def calculate(expression: str) -> dict:
     """Safely evaluates basic mathematical expressions."""
@@ -185,13 +235,13 @@ def get_gemini_tools() -> list:
 
     fn_search = types.FunctionDeclaration(
         name="web_search",
-        description="Opens a Google web search for a user search query in browser.",
+        description="Searches the web for current or latest results for a user query without opening a browser.",
         parameters=types.Schema(
             type=types.Type.OBJECT,
             properties={
                 "query": types.Schema(
                     type=types.Type.STRING,
-                    description="Search query terms"
+                    description="Search query terms for web/current/latest/news information"
                 )
             },
             required=["query"]
@@ -305,14 +355,14 @@ def get_openai_tools() -> list:
             "function": {
                 "name": "web_search",
                 "description": (
-                    "Opens a Google web search for the user's query."
+                    "Performs a browserless live web search for the user's current/latest/news query."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "The search query."
+                            "description": "The current/latest/news or general live search query."
                         }
                     },
                     "required": ["query"]
