@@ -1,13 +1,15 @@
 // APEX v0.1 Voice Interface Application
-// Phase 5: Tools & Actions
+// Conversation Mode
+//
 // Features:
-// - Time-aware welcome
+// - Time-aware spoken welcome
 // - Text chat
 // - Voice recording
 // - Automatic silence detection
 // - Voice transcription through /voice
 // - Text-to-speech
 // - Tool activity indicators
+// - Conversation Mode: listen -> process -> speak -> listen again
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -17,13 +19,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const statusContainer = document.querySelector('.status-container');
     const statusText = document.getElementById('statusText');
+
     const micBtn = document.getElementById('micBtn');
+    const conversationBtn =
+        document.getElementById('conversationBtn');
+
     const chatForm = document.getElementById('chatForm');
     const userInput = document.getElementById('userInput');
+
     const chatArea = document.getElementById('chatArea');
     const welcomeCard = document.getElementById('welcomeCard');
-    const notificationBanner = document.getElementById('notificationBanner');
-    const notificationMessage = document.getElementById('notificationMessage');
+
+    const notificationBanner =
+        document.getElementById('notificationBanner');
+
+    const notificationMessage =
+        document.getElementById('notificationMessage');
 
 
     // =========================================================
@@ -33,66 +44,84 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentState = 'READY';
     let isProcessing = false;
 
+    // Conversation mode
+    let conversationMode = false;
+
 
     // =========================================================
     // TIME-AWARE WELCOME
     // =========================================================
 
-function setTimeAwareWelcome() {
-const welcomeTitle = document.getElementById('welcomeTitle');
-const welcomeMessage = document.getElementById('welcomeMessage');
+    function setTimeAwareWelcome() {
 
+        const welcomeTitle =
+            document.getElementById('welcomeTitle');
 
-if (!welcomeTitle || !welcomeMessage) {
-    return;
-}
+        const welcomeMessage =
+            document.getElementById('welcomeMessage');
 
-const hour = new Date().getHours();
+        if (!welcomeTitle || !welcomeMessage) {
+            return;
+        }
 
-let greetings;
+        const hour = new Date().getHours();
 
-if (hour >= 5 && hour < 12) {
-    greetings = [
-        "Good morning, Boss. What's on your mind?",
-        "Morning, Boss. What can I do for you?",
-        "Good morning, Boss. Ready to get things moving?"
-    ];
-} else if (hour >= 12 && hour < 17) {
-    greetings = [
-        "Good afternoon, Boss. How's your day going?",
-        "Good afternoon, Boss. What are we working on?",
-        "Hey Boss, how can I help you?"
-    ];
-} else if (hour >= 17 && hour < 21) {
-    greetings = [
-        "Good evening, Boss. How was college today?",
-        "Hey Boss, you're back. How was your day?",
-        "Good evening, Boss. What's on your mind?"
-    ];
-} else {
-    greetings = [
-        "Still working, Boss? What's on your mind?",
-        "You're still up, Boss? What can I do for you?",
-        "Hey Boss, what's on your mind tonight?"
-    ];
-}
+        let greetings;
 
-const greeting =
-    greetings[Math.floor(Math.random() * greetings.length)];
+        if (hour >= 5 && hour < 12) {
 
-// Display greeting
-welcomeTitle.textContent = greeting;
-welcomeMessage.textContent = "What can I do for you?";
+            greetings = [
+                "Good morning, Boss. What's on your mind?",
+                "Morning, Boss. What can I do for you?",
+                "Good morning, Boss. Ready to get things moving?"
+            ];
 
-// Speak greeting after the page is ready
-if ('speechSynthesis' in window) {
-    setTimeout(() => {
-        speakResponse(greeting);
-    }, 500);
-}
+        } else if (hour >= 12 && hour < 17) {
 
+            greetings = [
+                "Good afternoon, Boss. How's your day going?",
+                "Good afternoon, Boss. What are we working on?",
+                "Hey Boss, how can I help you?"
+            ];
 
-}
+        } else if (hour >= 17 && hour < 21) {
+
+            greetings = [
+                "Good evening, Boss. How was college today?",
+                "Hey Boss, you're back. How was your day?",
+                "Good evening, Boss. What's on your mind?"
+            ];
+
+        } else {
+
+            greetings = [
+                "Still working, Boss? What's on your mind?",
+                "You're still up, Boss? What can I do for you?",
+                "Hey Boss, what's on your mind tonight?"
+            ];
+        }
+
+        const greeting =
+            greetings[
+                Math.floor(
+                    Math.random() * greetings.length
+                )
+            ];
+
+        welcomeTitle.textContent = greeting;
+        welcomeMessage.textContent =
+            "What can I do for you?";
+
+        // Speak the greeting after a short delay.
+        if ('speechSynthesis' in window) {
+
+            setTimeout(() => {
+
+                speakResponse(greeting);
+
+            }, 500);
+        }
+    }
 
 
     // =========================================================
@@ -111,18 +140,17 @@ if ('speechSynthesis' in window) {
     let audioContext = null;
     let analyser = null;
     let silenceCheckId = null;
+
     let silenceStart = null;
     let speechDetected = false;
 
-    // How quiet the microphone must be before we consider it silence.
     const SILENCE_THRESHOLD = 0.015;
 
-    // How long the user must remain silent after speaking.
     const SILENCE_DURATION = 1200;
 
 
     // =========================================================
-    // MEDIA RECORDER SUPPORT CHECK
+    // MEDIA RECORDER SUPPORT
     // =========================================================
 
     const isMediaRecorderSupported = !!(
@@ -132,8 +160,10 @@ if ('speechSynthesis' in window) {
     );
 
     if (!isMediaRecorderSupported) {
+
         showNotification(
-            "Audio recording is not supported in this browser. You can still use text input.",
+            "Audio recording is not supported in this browser. " +
+            "You can still use text input.",
             8000
         );
     }
@@ -144,13 +174,27 @@ if ('speechSynthesis' in window) {
     // =========================================================
 
     const TOOL_LABELS = {
-        "get_current_time": "Checking the time",
-        "get_current_date": "Checking the date",
-        "open_website": "Opening website",
-        "web_search": "Searching the web",
-        "calculate": "Calculating",
-        "get_system_info": "Reading system info",
-        "open_local_app": "Opening application"
+
+        "get_current_time":
+            "Checking the time",
+
+        "get_current_date":
+            "Checking the date",
+
+        "open_website":
+            "Opening website",
+
+        "web_search":
+            "Searching the web",
+
+        "calculate":
+            "Calculating",
+
+        "get_system_info":
+            "Reading system info",
+
+        "open_local_app":
+            "Opening application"
     };
 
 
@@ -159,6 +203,7 @@ if ('speechSynthesis' in window) {
     // =========================================================
 
     function setState(newState) {
+
         currentState = newState;
 
         if (statusText) {
@@ -166,26 +211,43 @@ if ('speechSynthesis' in window) {
         }
 
         if (statusContainer) {
-            statusContainer.className = 'status-container';
+
+            statusContainer.className =
+                'status-container';
+
             statusContainer.classList.add(
                 `status-${newState.toLowerCase()}`
             );
         }
 
         if (micBtn) {
+
             micBtn.classList.toggle(
                 'listening',
                 newState === 'LISTENING'
             );
 
             if (newState === 'LISTENING') {
-                micBtn.title = 'Listening... Speak now';
+
+                micBtn.title =
+                    conversationMode
+                        ? 'Listening...'
+                        : 'Listening... Speak now';
+
             } else if (newState === 'THINKING') {
-                micBtn.title = 'Processing...';
+
+                micBtn.title =
+                    'Processing...';
+
             } else if (newState === 'SPEAKING') {
-                micBtn.title = 'Click to stop speaking';
+
+                micBtn.title =
+                    'Click to interrupt';
+
             } else {
-                micBtn.title = 'Click to start listening';
+
+                micBtn.title =
+                    'Click to start listening';
             }
         }
 
@@ -194,6 +256,37 @@ if ('speechSynthesis' in window) {
             newState === 'SPEAKING' ||
             newState === 'LISTENING'
         );
+
+
+        // Update conversation button.
+
+        if (conversationBtn) {
+
+            if (conversationMode) {
+
+                conversationBtn.textContent =
+                    '🛑 End Conversation';
+
+                conversationBtn.classList.add(
+                    'conversation-active'
+                );
+
+                conversationBtn.title =
+                    'Stop conversation mode';
+
+            } else {
+
+                conversationBtn.textContent =
+                    '💬 Conversation';
+
+                conversationBtn.classList.remove(
+                    'conversation-active'
+                );
+
+                conversationBtn.title =
+                    'Start conversation mode';
+            }
+        }
     }
 
 
@@ -201,30 +294,50 @@ if ('speechSynthesis' in window) {
     // NOTIFICATION
     // =========================================================
 
-    function showNotification(message, duration = 5000) {
-        if (!notificationMessage || !notificationBanner) {
+    function showNotification(
+        message,
+        duration = 5000
+    ) {
+
+        if (
+            !notificationMessage ||
+            !notificationBanner
+        ) {
             return;
         }
 
-        notificationMessage.textContent = message;
-        notificationBanner.classList.remove('hidden');
+        notificationMessage.textContent =
+            message;
+
+        notificationBanner.classList.remove(
+            'hidden'
+        );
 
         setTimeout(() => {
-            notificationBanner.classList.add('hidden');
+
+            notificationBanner.classList.add(
+                'hidden'
+            );
+
         }, duration);
     }
 
 
     // =========================================================
-    // APPEND CHAT MESSAGE
+    // CHAT MESSAGE
     // =========================================================
 
-    function appendMessage(sender, text) {
+    function appendMessage(
+        sender,
+        text
+    ) {
+
         if (welcomeCard) {
             welcomeCard.style.display = 'none';
         }
 
-        const msgBubble = document.createElement('div');
+        const msgBubble =
+            document.createElement('div');
 
         msgBubble.classList.add(
             'message-bubble',
@@ -233,55 +346,91 @@ if ('speechSynthesis' in window) {
                 : 'apex-message'
         );
 
-        const msgHeader = document.createElement('div');
-        msgHeader.classList.add('message-header');
+        const msgHeader =
+            document.createElement('div');
+
+        msgHeader.classList.add(
+            'message-header'
+        );
+
         msgHeader.textContent = sender;
 
-        const msgBody = document.createElement('div');
-        msgBody.classList.add('message-body');
+        const msgBody =
+            document.createElement('div');
+
+        msgBody.classList.add(
+            'message-body'
+        );
+
         msgBody.textContent = text;
 
-        msgBubble.appendChild(msgHeader);
-        msgBubble.appendChild(msgBody);
+        msgBubble.appendChild(
+            msgHeader
+        );
 
-        chatArea.appendChild(msgBubble);
-        chatArea.scrollTop = chatArea.scrollHeight;
+        msgBubble.appendChild(
+            msgBody
+        );
+
+        chatArea.appendChild(
+            msgBubble
+        );
+
+        chatArea.scrollTop =
+            chatArea.scrollHeight;
     }
 
 
     // =========================================================
-    // TOOL ACTIVITY INDICATOR
+    // TOOL INDICATOR
     // =========================================================
 
-    function appendToolIndicator(toolName) {
+    function appendToolIndicator(
+        toolName
+    ) {
+
         if (welcomeCard) {
             welcomeCard.style.display = 'none';
         }
 
-        const label = TOOL_LABELS[toolName] || toolName;
+        const label =
+            TOOL_LABELS[toolName] ||
+            toolName;
 
-        const indicator = document.createElement('div');
+        const indicator =
+            document.createElement('div');
 
-        indicator.classList.add('tool-indicator');
+        indicator.classList.add(
+            'tool-indicator'
+        );
 
         indicator.innerHTML =
             `<span class="tool-icon">⚡</span>` +
-            `<span class="tool-label">APEX › ${label}...</span>`;
+            `<span class="tool-label">` +
+            `APEX › ${label}...` +
+            `</span>`;
 
-        indicator.id = 'tool-indicator-active';
+        indicator.id =
+            'tool-indicator-active';
 
-        chatArea.appendChild(indicator);
-        chatArea.scrollTop = chatArea.scrollHeight;
+        chatArea.appendChild(
+            indicator
+        );
+
+        chatArea.scrollTop =
+            chatArea.scrollHeight;
     }
 
 
     function removeToolIndicator() {
-        const el = document.getElementById(
-            'tool-indicator-active'
-        );
 
-        if (el) {
-            el.remove();
+        const element =
+            document.getElementById(
+                'tool-indicator-active'
+            );
+
+        if (element) {
+            element.remove();
         }
     }
 
@@ -290,61 +439,103 @@ if ('speechSynthesis' in window) {
     // SEND TEXT MESSAGE
     // =========================================================
 
-    async function sendTextMessage(text) {
-        if (!text || text.trim() === '') {
+    async function sendTextMessage(
+        text
+    ) {
+
+        if (
+            !text ||
+            text.trim() === ''
+        ) {
             return;
         }
 
-        appendMessage('USER', text);
+        appendMessage(
+            'USER',
+            text
+        );
 
         userInput.value = '';
 
         setState('THINKING');
 
         try {
-            const response = await fetch('/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: text
-                })
-            });
 
-            const data = await response.json();
+            const response =
+                await fetch(
+                    '/chat',
+                    {
+                        method: 'POST',
+
+                        headers: {
+                            'Content-Type':
+                                'application/json'
+                        },
+
+                        body: JSON.stringify({
+                            message: text
+                        })
+                    }
+                );
+
+            const data =
+                await response.json();
+
 
             if (data.tool_used) {
-                appendToolIndicator(data.tool_used);
 
-                await new Promise(resolve =>
-                    setTimeout(resolve, 400)
+                appendToolIndicator(
+                    data.tool_used
+                );
+
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            400
+                        )
                 );
 
                 removeToolIndicator();
             }
 
+
             if (data.success) {
-                appendMessage('APEX', data.response);
 
-                speakResponse(data.response);
+                appendMessage(
+                    'APEX',
+                    data.response
+                );
 
-            } else if (data.error_type === 'QUOTA_EXHAUSTED') {
+                speakResponse(
+                    data.response
+                );
+
+            } else if (
+                data.error_type ===
+                'QUOTA_EXHAUSTED'
+            ) {
 
                 const msg =
-                    "Oops, my AI brain has hit today's free quota 😅. " +
-                    "My built-in tools are still available! Try: " +
-                    "'What time is it?', 'Open YouTube', or " +
+                    "Oops, my AI brain has hit " +
+                    "today's free quota 😅. " +
+                    "My built-in tools are still " +
+                    "available! Try: 'What time is it?', " +
+                    "'Open YouTube', or " +
                     "'Calculate 25 * 17'.";
 
-                appendMessage('APEX', msg);
+                appendMessage(
+                    'APEX',
+                    msg
+                );
 
                 showNotification(
-                    "AI quota exhausted. Built-in tools still work!",
+                    "AI quota exhausted. " +
+                    "Built-in tools still work!",
                     7000
                 );
 
-                setState('READY');
+                handleResponseFinished();
 
             } else {
 
@@ -357,25 +548,31 @@ if ('speechSynthesis' in window) {
                     `[Error]: ${errorText}`
                 );
 
-                showNotification(errorText);
+                showNotification(
+                    errorText
+                );
 
-                setState('READY');
+                handleResponseFinished();
             }
 
         } catch (err) {
 
-            console.error('Fetch error:', err);
+            console.error(
+                'Fetch error:',
+                err
+            );
 
             appendMessage(
                 'APEX',
-                '[Error]: Network error. Could not connect to APEX backend server.'
+                '[Error]: Network error. ' +
+                'Could not connect to APEX backend server.'
             );
 
             showNotification(
                 'Network error. Could not connect to APEX backend.'
             );
 
-            setState('READY');
+            handleResponseFinished();
         }
     }
 
@@ -384,10 +581,15 @@ if ('speechSynthesis' in window) {
     // SEND VOICE MESSAGE
     // =========================================================
 
-    async function sendVoiceMessage(audioBlob, mimeType) {
+    async function sendVoiceMessage(
+        audioBlob,
+        mimeType
+    ) {
+
         setState('THINKING');
 
-        const formData = new FormData();
+        const formData =
+            new FormData();
 
         const extension =
             mimeType.includes('mp4')
@@ -400,23 +602,39 @@ if ('speechSynthesis' in window) {
             `recording.${extension}`
         );
 
-        try {
-            const response = await fetch('/voice', {
-                method: 'POST',
-                body: formData
-            });
 
-            const data = await response.json();
+        try {
+
+            const response =
+                await fetch(
+                    '/voice',
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+
+            const data =
+                await response.json();
+
 
             if (data.tool_used) {
-                appendToolIndicator(data.tool_used);
 
-                await new Promise(resolve =>
-                    setTimeout(resolve, 400)
+                appendToolIndicator(
+                    data.tool_used
+                );
+
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            400
+                        )
                 );
 
                 removeToolIndicator();
             }
+
 
             if (data.success) {
 
@@ -430,24 +648,32 @@ if ('speechSynthesis' in window) {
                     data.response
                 );
 
-                speakResponse(data.response);
+                speakResponse(
+                    data.response
+                );
 
-            } else if (data.error_type === 'QUOTA_EXHAUSTED') {
+            } else if (
+                data.error_type ===
+                'QUOTA_EXHAUSTED'
+            ) {
 
                 const msg =
-                    "Oops, my AI brain has hit today's free quota 😅. " +
-                    "My built-in tools are still available! " +
-                    "Try asking via text: 'What time is it?' " +
-                    "or 'Open YouTube'.";
+                    "Oops, my AI brain has hit " +
+                    "today's free quota 😅. " +
+                    "My built-in tools are still " +
+                    "available!";
 
-                appendMessage('APEX', msg);
+                appendMessage(
+                    'APEX',
+                    msg
+                );
 
                 showNotification(
-                    "AI quota exhausted. Text-based tools still work!",
+                    "AI quota exhausted.",
                     7000
                 );
 
-                setState('READY');
+                handleResponseFinished();
 
             } else {
 
@@ -455,20 +681,53 @@ if ('speechSynthesis' in window) {
                     data.error ||
                     'Failed to process voice input.';
 
-                showNotification(errorText);
+                showNotification(
+                    errorText
+                );
 
-                setState('READY');
+                handleResponseFinished();
             }
 
         } catch (err) {
 
-            console.error('Voice upload error:', err);
+            console.error(
+                'Voice upload error:',
+                err
+            );
 
             showNotification(
                 'Network error while sending audio to APEX backend.'
             );
 
-            setState('READY');
+            handleResponseFinished();
+        }
+    }
+
+
+    // =========================================================
+    // RESPONSE FINISHED
+    // =========================================================
+
+    function handleResponseFinished() {
+
+        setState('READY');
+
+        if (conversationMode) {
+
+            // Small delay so the user gets a natural pause
+            // before APEX starts listening again.
+
+            setTimeout(() => {
+
+                if (
+                    conversationMode &&
+                    currentState === 'READY'
+                ) {
+
+                    startRecording();
+                }
+
+            }, 500);
         }
     }
 
@@ -478,11 +737,13 @@ if ('speechSynthesis' in window) {
     // =========================================================
 
     function startSilenceDetection() {
+
         if (!mediaStream) {
             return;
         }
 
         try {
+
             audioContext =
                 new (
                     window.AudioContext ||
@@ -494,54 +755,70 @@ if ('speechSynthesis' in window) {
                     mediaStream
                 );
 
-            analyser = audioContext.createAnalyser();
+            analyser =
+                audioContext.createAnalyser();
 
             analyser.fftSize = 2048;
 
-            source.connect(analyser);
+            source.connect(
+                analyser
+            );
 
             const data =
-                new Uint8Array(analyser.fftSize);
+                new Uint8Array(
+                    analyser.fftSize
+                );
 
             silenceStart = null;
             speechDetected = false;
+
 
             function checkSilence() {
 
                 if (
                     !mediaRecorder ||
-                    mediaRecorder.state !== 'recording'
+                    mediaRecorder.state !==
+                        'recording'
                 ) {
                     return;
                 }
 
-                analyser.getByteTimeDomainData(data);
+
+                analyser.getByteTimeDomainData(
+                    data
+                );
+
 
                 let sum = 0;
 
-                for (let i = 0; i < data.length; i++) {
+
+                for (
+                    let i = 0;
+                    i < data.length;
+                    i++
+                ) {
 
                     const normalized =
                         (data[i] - 128) / 128;
 
-                    sum += normalized * normalized;
+                    sum +=
+                        normalized *
+                        normalized;
                 }
 
+
                 const rms =
-                    Math.sqrt(sum / data.length);
+                    Math.sqrt(
+                        sum / data.length
+                    );
 
 
-                // -----------------------------------------
-                // Speech detected
-                // -----------------------------------------
+                // Speech detected.
 
-                if (rms >= SILENCE_THRESHOLD) {
-
-                    if (!speechDetected) {
-                        console.log(
-                            'APEX: Speech detected.'
-                        );
-                    }
+                if (
+                    rms >=
+                    SILENCE_THRESHOLD
+                ) {
 
                     speechDetected = true;
 
@@ -549,28 +826,35 @@ if ('speechSynthesis' in window) {
                 }
 
 
-                // -----------------------------------------
-                // Silence AFTER speech
-                // -----------------------------------------
+                // Silence AFTER speech.
 
                 if (
                     speechDetected &&
-                    rms < SILENCE_THRESHOLD
+                    rms <
+                        SILENCE_THRESHOLD
                 ) {
 
-                    if (silenceStart === null) {
-                        silenceStart = Date.now();
+                    if (
+                        silenceStart === null
+                    ) {
+
+                        silenceStart =
+                            Date.now();
                     }
 
+
                     const silentFor =
-                        Date.now() - silenceStart;
+                        Date.now() -
+                        silenceStart;
+
 
                     if (
-                        silentFor >= SILENCE_DURATION
+                        silentFor >=
+                        SILENCE_DURATION
                     ) {
 
                         console.log(
-                            'APEX: Speech ended. Stopping recording.'
+                            'APEX: Speech ended.'
                         );
 
                         stopRecording();
@@ -585,6 +869,7 @@ if ('speechSynthesis' in window) {
                         checkSilence
                     );
             }
+
 
             checkSilence();
 
@@ -613,7 +898,9 @@ if ('speechSynthesis' in window) {
             silenceCheckId = null;
         }
 
+
         silenceStart = null;
+
         speechDetected = false;
 
 
@@ -625,6 +912,7 @@ if ('speechSynthesis' in window) {
 
             audioContext = null;
         }
+
 
         analyser = null;
     }
@@ -639,32 +927,49 @@ if ('speechSynthesis' in window) {
         if (!isMediaRecorderSupported) {
 
             showNotification(
-                "Audio recording is not supported in this browser."
+                "Audio recording is not supported."
             );
 
             return;
         }
 
+
+        // Prevent duplicate microphone sessions.
+
+        if (
+            mediaRecorder &&
+            mediaRecorder.state ===
+                'recording'
+        ) {
+            return;
+        }
+
+
         try {
 
-            // Stop any current speech synthesis.
-            if ('speechSynthesis' in window) {
+            // Stop APEX speech if necessary.
+
+            if (
+                'speechSynthesis' in
+                window
+            ) {
+
                 window.speechSynthesis.cancel();
             }
 
 
-            // Ask for microphone access.
             mediaStream =
-                await navigator.mediaDevices.getUserMedia({
-                    audio: true
-                });
+                await navigator.mediaDevices
+                    .getUserMedia({
+                        audio: true
+                    });
 
 
             audioChunks = [];
 
 
-            // Select supported recording format.
             let options = {};
+
 
             if (
                 MediaRecorder.isTypeSupported(
@@ -673,7 +978,8 @@ if ('speechSynthesis' in window) {
             ) {
 
                 options = {
-                    mimeType: 'audio/webm;codecs=opus'
+                    mimeType:
+                        'audio/webm;codecs=opus'
                 };
 
             } else if (
@@ -683,7 +989,8 @@ if ('speechSynthesis' in window) {
             ) {
 
                 options = {
-                    mimeType: 'audio/webm'
+                    mimeType:
+                        'audio/webm'
                 };
 
             } else if (
@@ -693,7 +1000,8 @@ if ('speechSynthesis' in window) {
             ) {
 
                 options = {
-                    mimeType: 'audio/mp4'
+                    mimeType:
+                        'audio/mp4'
                 };
             }
 
@@ -705,12 +1013,8 @@ if ('speechSynthesis' in window) {
                 );
 
 
-            // -----------------------------------------
-            // Audio data
-            // -----------------------------------------
-
             mediaRecorder.ondataavailable =
-                (event) => {
+                event => {
 
                     if (
                         event.data &&
@@ -723,10 +1027,6 @@ if ('speechSynthesis' in window) {
                     }
                 };
 
-
-            // -----------------------------------------
-            // Recording stopped
-            // -----------------------------------------
 
             mediaRecorder.onstop = () => {
 
@@ -747,33 +1047,34 @@ if ('speechSynthesis' in window) {
                     );
 
 
-                // Release microphone.
                 if (mediaStream) {
 
                     mediaStream
                         .getTracks()
-                        .forEach(track =>
-                            track.stop()
+                        .forEach(
+                            track =>
+                                track.stop()
                         );
 
                     mediaStream = null;
                 }
 
 
-                // Empty recording check.
-                if (audioBlob.size === 0) {
+                if (
+                    audioBlob.size === 0
+                ) {
 
                     showNotification(
-                        "No audio recorded. Please try again."
+                        "No audio recorded. " +
+                        "Please try again."
                     );
 
-                    setState('READY');
+                    handleResponseFinished();
 
                     return;
                 }
 
 
-                // Send recording to backend.
                 sendVoiceMessage(
                     audioBlob,
                     mimeType
@@ -781,17 +1082,18 @@ if ('speechSynthesis' in window) {
             };
 
 
-            // -----------------------------------------
-            // Start recording
-            // -----------------------------------------
-
             mediaRecorder.start();
 
-            setState('LISTENING');
+
+            setState(
+                'LISTENING'
+            );
+
 
             console.log(
                 'APEX: Listening...'
             );
+
 
             startSilenceDetection();
 
@@ -809,28 +1111,33 @@ if ('speechSynthesis' in window) {
 
 
             if (
-                err.name === 'NotAllowedError' ||
-                err.name === 'PermissionDeniedError'
+                err.name ===
+                    'NotAllowedError' ||
+                err.name ===
+                    'PermissionDeniedError'
             ) {
 
                 errorMsg =
                     "Microphone access denied. " +
-                    "Please allow microphone permissions " +
-                    "in your browser.";
+                    "Please allow microphone permissions.";
 
             } else if (
-                err.name === 'NotFoundError'
+                err.name ===
+                    'NotFoundError'
             ) {
 
                 errorMsg =
-                    "No microphone device found " +
-                    "on your system.";
+                    "No microphone device found.";
             }
 
 
-            showNotification(errorMsg);
+            showNotification(
+                errorMsg
+            );
 
-            setState('READY');
+            setState(
+                'READY'
+            );
         }
     }
 
@@ -843,9 +1150,11 @@ if ('speechSynthesis' in window) {
 
         stopSilenceDetection();
 
+
         if (
             mediaRecorder &&
-            mediaRecorder.state === 'recording'
+            mediaRecorder.state ===
+                'recording'
         ) {
 
             console.log(
@@ -867,7 +1176,7 @@ if ('speechSynthesis' in window) {
             !('speechSynthesis' in window)
         ) {
 
-            setState('READY');
+            handleResponseFinished();
 
             return;
         }
@@ -877,51 +1186,164 @@ if ('speechSynthesis' in window) {
 
 
         const utterance =
-            new SpeechSynthesisUtterance(text);
+            new SpeechSynthesisUtterance(
+                text
+            );
 
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
 
 
         const voices =
-            window.speechSynthesis.getVoices();
+            window.speechSynthesis
+                .getVoices();
 
 
         const preferredVoice =
-            voices.find(voice =>
-                voice.lang.startsWith('en') &&
-                (
-                    voice.name.includes('Google') ||
-                    voice.name.includes('Natural') ||
-                    voice.name.includes('David') ||
-                    voice.name.includes('Zira')
-                )
+            voices.find(
+                voice =>
+                    voice.lang.startsWith(
+                        'en'
+                    ) &&
+                    (
+                        voice.name.includes(
+                            'Google'
+                        ) ||
+                        voice.name.includes(
+                            'Natural'
+                        ) ||
+                        voice.name.includes(
+                            'David'
+                        ) ||
+                        voice.name.includes(
+                            'Zira'
+                        )
+                    )
             );
 
 
         if (preferredVoice) {
-            utterance.voice = preferredVoice;
+
+            utterance.voice =
+                preferredVoice;
         }
 
 
         utterance.onstart = () => {
-            setState('SPEAKING');
+
+            setState(
+                'SPEAKING'
+            );
         };
 
 
         utterance.onend = () => {
-            setState('READY');
+
+            handleResponseFinished();
         };
 
 
         utterance.onerror = () => {
-            setState('READY');
+
+            handleResponseFinished();
         };
 
 
         window.speechSynthesis.speak(
             utterance
         );
+    }
+
+
+    // =========================================================
+    // CONVERSATION MODE
+    // =========================================================
+
+    function startConversationMode() {
+
+        if (conversationMode) {
+            return;
+        }
+
+
+        conversationMode = true;
+
+
+        showNotification(
+            "Conversation mode started. " +
+            "Speak naturally; APEX will listen again " +
+            "after each response.",
+            5000
+        );
+
+
+        setState(
+            'READY'
+        );
+
+
+        // Start listening.
+
+        setTimeout(() => {
+
+            if (conversationMode) {
+                startRecording();
+            }
+
+        }, 600);
+    }
+
+
+    function stopConversationMode() {
+
+        conversationMode = false;
+
+
+        // Stop recording if active.
+
+        if (
+            mediaRecorder &&
+            mediaRecorder.state ===
+                'recording'
+        ) {
+
+            stopRecording();
+        }
+
+
+        // Stop APEX speech.
+
+        if (
+            'speechSynthesis' in
+            window
+        ) {
+
+            window.speechSynthesis.cancel();
+        }
+
+
+        setState(
+            'READY'
+        );
+
+
+        showNotification(
+            "Conversation mode ended.",
+            2500
+        );
+    }
+
+
+    function toggleConversationMode() {
+
+        if (conversationMode) {
+
+            stopConversationMode();
+
+        } else {
+
+            startConversationMode();
+        }
     }
 
 
@@ -933,32 +1355,84 @@ if ('speechSynthesis' in window) {
         'click',
         () => {
 
-            if (currentState === 'READY') {
+            // If APEX is speaking,
+            // clicking the microphone interrupts it.
 
-                startRecording();
-
-            } else if (
-                currentState === 'LISTENING'
-            ) {
-
-                // Manual stop still works.
-                stopRecording();
-
-            } else if (
-                currentState === 'SPEAKING'
+            if (
+                currentState ===
+                'SPEAKING'
             ) {
 
                 if (
-                    'speechSynthesis' in window
+                    'speechSynthesis' in
+                    window
                 ) {
 
                     window.speechSynthesis.cancel();
                 }
 
-                setState('READY');
+
+                if (
+                    conversationMode
+                ) {
+
+                    setTimeout(
+                        () =>
+                            startRecording(),
+                        300
+                    );
+
+                } else {
+
+                    setState(
+                        'READY'
+                    );
+                }
+
+
+                return;
+            }
+
+
+            // If currently listening,
+            // clicking microphone manually stops it.
+
+            if (
+                currentState ===
+                'LISTENING'
+            ) {
+
+                stopRecording();
+
+                return;
+            }
+
+
+            // Normal mode.
+
+            if (
+                currentState ===
+                    'READY' &&
+                !conversationMode
+            ) {
+
+                startRecording();
             }
         }
     );
+
+
+    // =========================================================
+    // CONVERSATION BUTTON
+    // =========================================================
+
+    if (conversationBtn) {
+
+        conversationBtn.addEventListener(
+            'click',
+            toggleConversationMode
+        );
+    }
 
 
     // =========================================================
@@ -967,9 +1441,10 @@ if ('speechSynthesis' in window) {
 
     chatForm.addEventListener(
         'submit',
-        (event) => {
+        event => {
 
             event.preventDefault();
+
 
             const messageText =
                 userInput.value.trim();
@@ -981,11 +1456,13 @@ if ('speechSynthesis' in window) {
             ) {
 
                 if (
-                    'speechSynthesis' in window
+                    'speechSynthesis' in
+                    window
                 ) {
 
                     window.speechSynthesis.cancel();
                 }
+
 
                 sendTextMessage(
                     messageText
@@ -1000,19 +1477,22 @@ if ('speechSynthesis' in window) {
     // =========================================================
 
     if (
-        'speechSynthesis' in window
+        'speechSynthesis' in
+        window
     ) {
 
         window.speechSynthesis.onvoiceschanged =
             () =>
-                window.speechSynthesis.getVoices();
+                window.speechSynthesis
+                    .getVoices();
     }
 
 
     // =========================================================
-    // INITIALIZE TIME-AWARE WELCOME
+    // INITIALIZE
     // =========================================================
 
     setTimeAwareWelcome();
 
 });
+
