@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>APEX v0.1 — Advanced Personal Executive</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Header -->
@@ -30,9 +33,10 @@
         <main class="chat-area" id="chatArea">
             <div class="welcome-card" id="welcomeCard">
                 <div class="ai-avatar">🤖</div>
-                <h2>APEX is online</h2>
-                <p>Click the microphone button to speak or type a message below.</p>
+                <h2 id="welcomeTitle">APEX is online</h2>
+                <p id="welcomeMessage">What can I do for you, Boss?</p>
             </div>
+
         </main>
 
         <!-- Notification Banner -->
@@ -43,20 +47,15 @@
         <!-- Controls Section -->
         <footer class="controls-footer">
             <div class="voice-control">
-                <button class="mic-btn" id="micBtn" title="Push to talk">
+                <button class="mic-btn" id="micBtn" title="Click to start listening">
                     <div class="pulse-ring"></div>
                     <span class="mic-icon">🎙️</span>
                 </button>
             </div>
 
             <form class="input-form" id="chatForm">
-                <input 
-                    type="text" 
-                    id="userInput" 
-                    placeholder="Type a message or use microphone..." 
-                    autocomplete="off"
-                    required
-                />
+                <input type="text" id="userInput" placeholder="Type a message or use microphone..." autocomplete="off"
+                    required />
                 <button type="submit" id="sendBtn" class="send-btn">
                     <span>Send</span>
                     <span class="send-icon">➤</span>
@@ -67,4 +66,5 @@
 
     <script src="/static/app.js"></script>
 </body>
+
 </html>
