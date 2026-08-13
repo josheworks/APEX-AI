@@ -9,7 +9,12 @@
 // - Voice transcription through /voice
 // - Text-to-speech
 // - Tool activity indicators
-// - Conversation Mode: listen -> process -> speak -> listen again
+// - Conversation Mode
+// - Reliable "OK APEX" stop command
+// - Emoji -> spoken meaning for TTS
+// - Conversation Mode audio visual interface
+// - Click microphone while speaking to interrupt APEX
+
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -17,18 +22,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM ELEMENTS
     // =========================================================
 
-    const statusContainer = document.querySelector('.status-container');
-    const statusText = document.getElementById('statusText');
+    const statusContainer =
+        document.querySelector('.status-container');
 
-    const micBtn = document.getElementById('micBtn');
+    const statusText =
+        document.getElementById('statusText');
+
+    const micBtn =
+        document.getElementById('micBtn');
+
     const conversationBtn =
         document.getElementById('conversationBtn');
 
-    const chatForm = document.getElementById('chatForm');
-    const userInput = document.getElementById('userInput');
+    const chatForm =
+        document.getElementById('chatForm');
 
-    const chatArea = document.getElementById('chatArea');
-    const welcomeCard = document.getElementById('welcomeCard');
+    const userInput =
+        document.getElementById('userInput');
+
+    const chatArea =
+        document.getElementById('chatArea');
+
+    const welcomeCard =
+        document.getElementById('welcomeCard');
 
     const notificationBanner =
         document.getElementById('notificationBanner');
@@ -42,10 +58,663 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     let currentState = 'READY';
+
     let isProcessing = false;
 
-    // Conversation mode
     let conversationMode = false;
+
+
+    // =========================================================
+    // CONVERSATION MODE AUDIO UI
+    // =========================================================
+    //
+    // When Conversation Mode is active:
+    //
+    // Normal:
+    //      CHAT LAYOUT
+    //
+    // Conversation Mode:
+    //      🎙️
+    //      APEX VOICE MODE
+    //      LISTENING / THINKING / SPEAKING
+    //
+    // Chat is restored when Conversation Mode ends.
+    //
+
+
+    let conversationVisual = null;
+
+
+    function createConversationVisual() {
+
+        if (conversationVisual) {
+            return;
+        }
+
+
+        conversationVisual =
+            document.createElement('div');
+
+
+        conversationVisual.id =
+            'conversationVisual';
+
+
+        conversationVisual.innerHTML = `
+            <div class="conversation-orb">
+                <div class="conversation-orb-inner">
+                    🎙️
+                </div>
+            </div>
+
+            <div class="conversation-title">
+                APEX VOICE MODE
+            </div>
+
+            <div
+                class="conversation-state"
+                id="conversationVisualState"
+            >
+                READY
+            </div>
+
+            <div class="conversation-hint">
+                Say "OK APEX" to stop
+            </div>
+        `;
+
+
+        conversationVisual.style.cssText = `
+            flex: 1;
+            min-height: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 30px;
+            overflow: hidden;
+        `;
+
+
+        const style =
+            document.createElement('style');
+
+
+        style.id =
+            'apex-conversation-visual-style';
+
+
+        style.textContent = `
+
+            #conversationVisual {
+                position: relative;
+            }
+
+            #conversationVisual::before {
+                content: "";
+                position: absolute;
+                width: 300px;
+                height: 300px;
+                border-radius: 50%;
+                background: radial-gradient(
+                    circle,
+                    rgba(0, 242, 254, 0.10),
+                    transparent 70%
+                );
+                pointer-events: none;
+            }
+
+            .conversation-orb {
+                width: 170px;
+                height: 170px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 2px solid rgba(0, 242, 254, 0.7);
+                box-shadow:
+                    0 0 25px rgba(0, 242, 254, 0.25),
+                    inset 0 0 30px rgba(0, 242, 254, 0.08);
+                transition:
+                    transform 0.3s ease,
+                    box-shadow 0.3s ease,
+                    border-color 0.3s ease;
+                animation: apexVoiceIdle 3s ease-in-out infinite;
+                z-index: 1;
+            }
+
+            .conversation-orb-inner {
+                width: 130px;
+                height: 130px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 4rem;
+                background:
+                    radial-gradient(
+                        circle,
+                        rgba(30, 41, 59, 0.95),
+                        rgba(15, 23, 42, 0.95)
+                    );
+            }
+
+            .conversation-title {
+                margin-top: 28px;
+                font-family: var(--font-mono);
+                font-size: 0.85rem;
+                letter-spacing: 2px;
+                color: var(--text-secondary);
+                z-index: 1;
+            }
+
+            .conversation-state {
+                margin-top: 10px;
+                font-family: var(--font-mono);
+                font-size: 1rem;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+                color: var(--accent-cyan);
+                z-index: 1;
+            }
+
+            .conversation-hint {
+                margin-top: 18px;
+                font-size: 0.78rem;
+                color: var(--text-secondary);
+                opacity: 0.8;
+                z-index: 1;
+            }
+
+            #conversationVisual.visual-listening
+            .conversation-orb {
+                border-color: var(--status-listening);
+                box-shadow:
+                    0 0 35px rgba(255, 0, 85, 0.55),
+                    inset 0 0 35px rgba(255, 0, 85, 0.10);
+                animation: apexVoiceListening 1s ease-in-out infinite;
+            }
+
+            #conversationVisual.visual-thinking
+            .conversation-orb {
+                border-color: var(--status-thinking);
+                box-shadow:
+                    0 0 35px rgba(168, 85, 247, 0.55),
+                    inset 0 0 35px rgba(168, 85, 247, 0.10);
+                animation: apexVoiceThinking 0.8s linear infinite;
+            }
+
+            #conversationVisual.visual-speaking
+            .conversation-orb {
+                border-color: var(--status-speaking);
+                box-shadow:
+                    0 0 40px rgba(16, 185, 129, 0.55),
+                    inset 0 0 40px rgba(16, 185, 129, 0.10);
+                animation: apexVoiceSpeaking 0.55s ease-in-out infinite;
+            }
+
+            @keyframes apexVoiceIdle {
+                0%, 100% {
+                    transform: scale(1);
+                }
+
+                50% {
+                    transform: scale(1.04);
+                }
+            }
+
+            @keyframes apexVoiceListening {
+                0%, 100% {
+                    transform: scale(1);
+                }
+
+                50% {
+                    transform: scale(1.12);
+                }
+            }
+
+            @keyframes apexVoiceThinking {
+                0% {
+                    transform: rotate(0deg) scale(1);
+                }
+
+                50% {
+                    transform: rotate(180deg) scale(1.08);
+                }
+
+                100% {
+                    transform: rotate(360deg) scale(1);
+                }
+            }
+
+            @keyframes apexVoiceSpeaking {
+                0%, 100% {
+                    transform: scale(1);
+                }
+
+                25% {
+                    transform: scale(1.08);
+                }
+
+                50% {
+                    transform: scale(1.16);
+                }
+
+                75% {
+                    transform: scale(1.08);
+                }
+            }
+
+        `;
+
+
+        document.head.appendChild(style);
+
+        chatArea.parentNode.insertBefore(
+            conversationVisual,
+            chatArea.nextSibling
+        );
+    }
+
+
+    function updateConversationVisualState(
+        state
+    ) {
+
+        if (!conversationVisual) {
+            return;
+        }
+
+
+        const visualState =
+            document.getElementById(
+                'conversationVisualState'
+            );
+
+
+        conversationVisual.classList.remove(
+            'visual-listening',
+            'visual-thinking',
+            'visual-speaking'
+        );
+
+
+        if (visualState) {
+            visualState.textContent =
+                state;
+        }
+
+
+        if (state === 'LISTENING') {
+
+            conversationVisual.classList.add(
+                'visual-listening'
+            );
+
+        } else if (state === 'THINKING') {
+
+            conversationVisual.classList.add(
+                'visual-thinking'
+            );
+
+        } else if (state === 'SPEAKING') {
+
+            conversationVisual.classList.add(
+                'visual-speaking'
+            );
+        }
+    }
+
+
+    function setConversationVisualMode(
+        enabled
+    ) {
+
+        createConversationVisual();
+
+
+        if (enabled) {
+
+            // Hide normal chat layout.
+            chatArea.style.display =
+                'none';
+
+
+            // Show voice interface.
+            conversationVisual.style.display =
+                'flex';
+
+
+            updateConversationVisualState(
+                currentState
+            );
+
+        } else {
+
+            // Restore normal chat layout.
+            conversationVisual.style.display =
+                'none';
+
+
+            chatArea.style.display =
+                'flex';
+        }
+    }
+
+
+    // =========================================================
+    // OK APEX STOP COMMAND
+    // =========================================================
+
+    let recognition = null;
+
+
+    const recognitionSupported = !!(
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition
+    );
+
+
+    let stopCommandDetected = false;
+
+
+    // Rolling speech-recognition buffer.
+    //
+    // This handles:
+    //
+    // "Okay"
+    // "APEX"
+    //
+    // arriving as separate recognition results.
+
+    let recognitionBuffer = '';
+
+
+    function normalizeRecognitionText(
+        text
+    ) {
+
+        return (text || '')
+            .toLowerCase()
+            .replace(
+                /[.,!?;:'"()[\]{}]/g,
+                ' '
+            )
+            .replace(
+                /\s+/g,
+                ' '
+            )
+            .trim();
+    }
+
+
+    function checkForStopCommand(
+        text
+    ) {
+
+        const normalized =
+            normalizeRecognitionText(
+                text
+            );
+
+
+        if (!normalized) {
+            return false;
+        }
+
+
+        return /\b(?:ok|okay)\s+apex\b/i.test(
+            normalized
+        );
+    }
+
+
+    function startRecognition() {
+
+        if (
+            !recognitionSupported ||
+            recognition
+        ) {
+            return;
+        }
+
+
+        try {
+
+            const Rec =
+                window.SpeechRecognition ||
+                window.webkitSpeechRecognition;
+
+
+            recognition =
+                new Rec();
+
+
+            recognition.continuous =
+                true;
+
+
+            recognition.interimResults =
+                true;
+
+
+            recognition.lang =
+                'en-US';
+
+
+            recognitionBuffer =
+                '';
+
+
+            recognition.onresult =
+                (event) => {
+
+                    try {
+
+                        let latestTranscript =
+                            '';
+
+
+                        for (
+                            let i =
+                                event.resultIndex;
+                            i <
+                                event.results.length;
+                            i++
+                        ) {
+
+                            const result =
+                                event.results[i];
+
+
+                            const transcript =
+                                result[0]
+                                    .transcript ||
+                                '';
+
+
+                            latestTranscript +=
+                                ' ' +
+                                transcript;
+                        }
+
+
+                        const normalized =
+                            normalizeRecognitionText(
+                                latestTranscript
+                            );
+
+
+                        if (!normalized) {
+                            return;
+                        }
+
+
+                        recognitionBuffer =
+                            `${recognitionBuffer} ${normalized}`
+                                .replace(
+                                    /\s+/g,
+                                    ' '
+                                )
+                                .trim();
+
+
+                        // Keep only recent words.
+                        const words =
+                            recognitionBuffer.split(
+                                ' '
+                            );
+
+
+                        recognitionBuffer =
+                            words
+                                .slice(-8)
+                                .join(' ');
+
+
+                        // -------------------------------------------------
+                        // OK APEX
+                        // -------------------------------------------------
+
+                        if (
+                            conversationMode &&
+                            !stopCommandDetected &&
+                            checkForStopCommand(
+                                recognitionBuffer
+                            )
+                        ) {
+
+                            stopCommandDetected =
+                                true;
+
+
+                            console.log(
+                                'APEX: OK APEX stop command detected.'
+                            );
+
+
+                            // Stop recognition immediately.
+                            stopRecognition();
+
+
+                            // Stop Conversation Mode.
+                            stopConversationMode();
+
+
+                            recognitionBuffer =
+                                '';
+
+
+                            return;
+                        }
+
+                    } catch (error) {
+
+                        console.warn(
+                            'Recognition processing error:',
+                            error
+                        );
+                    }
+                };
+
+
+            recognition.onend =
+                () => {
+
+                    if (
+                        conversationMode &&
+                        currentState ===
+                            'LISTENING' &&
+                        !stopCommandDetected
+                    ) {
+
+                        try {
+
+                            recognition.start();
+
+                        } catch (error) {
+
+                            // Ignore duplicate start errors.
+                        }
+                    }
+                };
+
+
+            recognition.onerror =
+                (error) => {
+
+                    console.warn(
+                        'SpeechRecognition error:',
+                        error
+                    );
+                };
+
+
+            try {
+
+                recognition.start();
+
+            } catch (error) {
+
+                console.warn(
+                    'SpeechRecognition start error:',
+                    error
+                );
+            }
+
+        } catch (error) {
+
+            console.warn(
+                'SpeechRecognition not available:',
+                error
+            );
+
+
+            recognition =
+                null;
+        }
+    }
+
+
+    function stopRecognition() {
+
+        if (!recognition) {
+
+            recognitionBuffer =
+                '';
+
+            return;
+        }
+
+
+        try {
+
+            recognition.onresult =
+                null;
+
+            recognition.onend =
+                null;
+
+            recognition.onerror =
+                null;
+
+
+            recognition.stop();
+
+        } catch (error) {
+
+            // Ignore stop errors.
+        }
+
+
+        recognition =
+            null;
+
+
+        recognitionBuffer =
+            '';
+    }
 
 
     // =========================================================
@@ -55,20 +724,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function setTimeAwareWelcome() {
 
         const welcomeTitle =
-            document.getElementById('welcomeTitle');
+            document.getElementById(
+                'welcomeTitle'
+            );
+
 
         const welcomeMessage =
-            document.getElementById('welcomeMessage');
+            document.getElementById(
+                'welcomeMessage'
+            );
 
-        if (!welcomeTitle || !welcomeMessage) {
+
+        if (
+            !welcomeTitle ||
+            !welcomeMessage
+        ) {
             return;
         }
 
-        const hour = new Date().getHours();
+
+        const hour =
+            new Date().getHours();
+
 
         let greetings;
 
-        if (hour >= 5 && hour < 12) {
+
+        if (
+            hour >= 5 &&
+            hour < 12
+        ) {
 
             greetings = [
                 "Good morning, Boss. What's on your mind?",
@@ -76,7 +761,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 "Good morning, Boss. Ready to get things moving?"
             ];
 
-        } else if (hour >= 12 && hour < 17) {
+        } else if (
+            hour >= 12 &&
+            hour < 17
+        ) {
 
             greetings = [
                 "Good afternoon, Boss. How's your day going?",
@@ -84,7 +772,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 "Hey Boss, how can I help you?"
             ];
 
-        } else if (hour >= 17 && hour < 21) {
+        } else if (
+            hour >= 17 &&
+            hour < 21
+        ) {
 
             greetings = [
                 "Good evening, Boss. How was college today?",
@@ -101,23 +792,33 @@ document.addEventListener('DOMContentLoaded', () => {
             ];
         }
 
+
         const greeting =
             greetings[
                 Math.floor(
-                    Math.random() * greetings.length
+                    Math.random() *
+                    greetings.length
                 )
             ];
 
-        welcomeTitle.textContent = greeting;
+
+        welcomeTitle.textContent =
+            greeting;
+
+
         welcomeMessage.textContent =
             "What can I do for you?";
 
-        // Speak the greeting after a short delay.
-        if ('speechSynthesis' in window) {
+
+        if (
+            'speechSynthesis' in window
+        ) {
 
             setTimeout(() => {
 
-                speakResponse(greeting);
+                speakResponse(
+                    greeting
+                );
 
             }, 500);
         }
@@ -129,7 +830,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     let mediaRecorder = null;
+
     let audioChunks = [];
+
     let mediaStream = null;
 
 
@@ -138,15 +841,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     let audioContext = null;
+
     let analyser = null;
+
     let silenceCheckId = null;
 
     let silenceStart = null;
+
     let speechDetected = false;
 
-    const SILENCE_THRESHOLD = 0.015;
 
-    const SILENCE_DURATION = 1200;
+    const SILENCE_THRESHOLD =
+        0.015;
+
+
+    const SILENCE_DURATION =
+        1200;
 
 
     // =========================================================
@@ -159,7 +869,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.MediaRecorder
     );
 
-    if (!isMediaRecorderSupported) {
+
+    if (
+        !isMediaRecorderSupported
+    ) {
 
         showNotification(
             "Audio recording is not supported in this browser. " +
@@ -202,47 +915,65 @@ document.addEventListener('DOMContentLoaded', () => {
     // STATE MACHINE
     // =========================================================
 
-    function setState(newState) {
+    function setState(
+        newState
+    ) {
 
-        currentState = newState;
+        currentState =
+            newState;
+
 
         if (statusText) {
-            statusText.textContent = newState;
+
+            statusText.textContent =
+                newState;
         }
+
 
         if (statusContainer) {
 
             statusContainer.className =
                 'status-container';
 
+
             statusContainer.classList.add(
                 `status-${newState.toLowerCase()}`
             );
         }
 
+
         if (micBtn) {
 
             micBtn.classList.toggle(
                 'listening',
-                newState === 'LISTENING'
+                newState ===
+                    'LISTENING'
             );
 
-            if (newState === 'LISTENING') {
+
+            if (
+                newState ===
+                'LISTENING'
+            ) {
 
                 micBtn.title =
-                    conversationMode
-                        ? 'Listening...'
-                        : 'Listening... Speak now';
+                    'Listening...';
 
-            } else if (newState === 'THINKING') {
+            } else if (
+                newState ===
+                'THINKING'
+            ) {
 
                 micBtn.title =
                     'Processing...';
 
-            } else if (newState === 'SPEAKING') {
+            } else if (
+                newState ===
+                'SPEAKING'
+            ) {
 
                 micBtn.title =
-                    'Click to interrupt';
+                    'Click to interrupt APEX';
 
             } else {
 
@@ -251,6 +982,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+
         isProcessing = (
             newState === 'THINKING' ||
             newState === 'SPEAKING' ||
@@ -258,18 +990,33 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
+        // Update audio interface.
+        if (
+            conversationMode
+        ) {
+
+            updateConversationVisualState(
+                newState
+            );
+        }
+
+
         // Update conversation button.
 
         if (conversationBtn) {
 
-            if (conversationMode) {
+            if (
+                conversationMode
+            ) {
 
                 conversationBtn.textContent =
                     '🛑 End Conversation';
 
+
                 conversationBtn.classList.add(
                     'conversation-active'
                 );
+
 
                 conversationBtn.title =
                     'Stop conversation mode';
@@ -279,9 +1026,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 conversationBtn.textContent =
                     '💬 Conversation';
 
+
                 conversationBtn.classList.remove(
                     'conversation-active'
                 );
+
 
                 conversationBtn.title =
                     'Start conversation mode';
@@ -306,12 +1055,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+
         notificationMessage.textContent =
             message;
+
 
         notificationBanner.classList.remove(
             'hidden'
         );
+
 
         setTimeout(() => {
 
@@ -333,11 +1085,17 @@ document.addEventListener('DOMContentLoaded', () => {
     ) {
 
         if (welcomeCard) {
-            welcomeCard.style.display = 'none';
+
+            welcomeCard.style.display =
+                'none';
         }
 
+
         const msgBubble =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
+
 
         msgBubble.classList.add(
             'message-bubble',
@@ -346,35 +1104,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'apex-message'
         );
 
+
         const msgHeader =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
+
 
         msgHeader.classList.add(
             'message-header'
         );
 
-        msgHeader.textContent = sender;
+
+        msgHeader.textContent =
+            sender;
+
 
         const msgBody =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
+
 
         msgBody.classList.add(
             'message-body'
         );
 
-        msgBody.textContent = text;
+
+        msgBody.textContent =
+            text;
+
 
         msgBubble.appendChild(
             msgHeader
         );
 
+
         msgBubble.appendChild(
             msgBody
         );
 
+
         chatArea.appendChild(
             msgBubble
         );
+
 
         chatArea.scrollTop =
             chatArea.scrollHeight;
@@ -390,19 +1164,27 @@ document.addEventListener('DOMContentLoaded', () => {
     ) {
 
         if (welcomeCard) {
-            welcomeCard.style.display = 'none';
+
+            welcomeCard.style.display =
+                'none';
         }
+
 
         const label =
             TOOL_LABELS[toolName] ||
             toolName;
 
+
         const indicator =
-            document.createElement('div');
+            document.createElement(
+                'div'
+            );
+
 
         indicator.classList.add(
             'tool-indicator'
         );
+
 
         indicator.innerHTML =
             `<span class="tool-icon">⚡</span>` +
@@ -410,12 +1192,15 @@ document.addEventListener('DOMContentLoaded', () => {
             `APEX › ${label}...` +
             `</span>`;
 
+
         indicator.id =
             'tool-indicator-active';
+
 
         chatArea.appendChild(
             indicator
         );
+
 
         chatArea.scrollTop =
             chatArea.scrollHeight;
@@ -429,7 +1214,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 'tool-indicator-active'
             );
 
+
         if (element) {
+
             element.remove();
         }
     }
@@ -450,14 +1237,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+
         appendMessage(
             'USER',
             text
         );
 
-        userInput.value = '';
 
-        setState('THINKING');
+        userInput.value =
+            '';
+
+
+        setState(
+            'THINKING'
+        );
+
 
         try {
 
@@ -478,15 +1272,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 );
 
+
             const data =
                 await response.json();
 
 
-            if (data.tool_used) {
+            if (
+                data.tool_used
+            ) {
 
                 appendToolIndicator(
                     data.tool_used
                 );
+
 
                 await new Promise(
                     resolve =>
@@ -496,16 +1294,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         )
                 );
 
+
                 removeToolIndicator();
             }
 
 
-            if (data.success) {
+            if (
+                data.success
+            ) {
 
                 appendMessage(
                     'APEX',
                     data.response
                 );
+
 
                 speakResponse(
                     data.response
@@ -524,16 +1326,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     "'Open YouTube', or " +
                     "'Calculate 25 * 17'.";
 
+
                 appendMessage(
                     'APEX',
                     msg
                 );
+
 
                 showNotification(
                     "AI quota exhausted. " +
                     "Built-in tools still work!",
                     7000
                 );
+
 
                 handleResponseFinished();
 
@@ -543,14 +1348,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.error ||
                     'Failed to get response from APEX.';
 
+
                 appendMessage(
                     'APEX',
                     `[Error]: ${errorText}`
                 );
 
+
                 showNotification(
                     errorText
                 );
+
 
                 handleResponseFinished();
             }
@@ -562,15 +1370,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 err
             );
 
+
             appendMessage(
                 'APEX',
                 '[Error]: Network error. ' +
                 'Could not connect to APEX backend server.'
             );
 
+
             showNotification(
                 'Network error. Could not connect to APEX backend.'
             );
+
 
             handleResponseFinished();
         }
@@ -586,15 +1397,20 @@ document.addEventListener('DOMContentLoaded', () => {
         mimeType
     ) {
 
-        setState('THINKING');
+        setState(
+            'THINKING'
+        );
+
 
         const formData =
             new FormData();
+
 
         const extension =
             mimeType.includes('mp4')
                 ? 'mp4'
                 : 'webm';
+
 
         formData.append(
             'file',
@@ -614,15 +1430,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 );
 
+
             const data =
                 await response.json();
 
 
-            if (data.tool_used) {
+            if (
+                data.tool_used
+            ) {
 
                 appendToolIndicator(
                     data.tool_used
                 );
+
 
                 await new Promise(
                     resolve =>
@@ -632,21 +1452,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         )
                 );
 
+
                 removeToolIndicator();
             }
 
 
-            if (data.success) {
+            if (
+                data.success
+            ) {
 
                 appendMessage(
                     'USER',
                     data.transcription
                 );
 
+
                 appendMessage(
                     'APEX',
                     data.response
                 );
+
 
                 speakResponse(
                     data.response
@@ -663,15 +1488,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     "My built-in tools are still " +
                     "available!";
 
+
                 appendMessage(
                     'APEX',
                     msg
                 );
 
+
                 showNotification(
                     "AI quota exhausted.",
                     7000
                 );
+
 
                 handleResponseFinished();
 
@@ -681,9 +1509,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.error ||
                     'Failed to process voice input.';
 
+
                 showNotification(
                     errorText
                 );
+
 
                 handleResponseFinished();
             }
@@ -695,9 +1525,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 err
             );
 
+
             showNotification(
-                'Network error while sending audio to APEX backend.'
+                'Network error while sending audio to APEX.'
             );
+
 
             handleResponseFinished();
         }
@@ -710,18 +1542,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleResponseFinished() {
 
-        setState('READY');
+        setState(
+            'READY'
+        );
 
-        if (conversationMode) {
 
-            // Small delay so the user gets a natural pause
-            // before APEX starts listening again.
+        if (
+            conversationMode
+        ) {
 
             setTimeout(() => {
 
                 if (
                     conversationMode &&
-                    currentState === 'READY'
+                    currentState ===
+                        'READY'
                 ) {
 
                     startRecording();
@@ -742,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+
         try {
 
             audioContext =
@@ -750,27 +1586,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.webkitAudioContext
                 )();
 
+
             const source =
                 audioContext.createMediaStreamSource(
                     mediaStream
                 );
 
+
             analyser =
                 audioContext.createAnalyser();
 
-            analyser.fftSize = 2048;
+
+            analyser.fftSize =
+                2048;
+
 
             source.connect(
                 analyser
             );
+
 
             const data =
                 new Uint8Array(
                     analyser.fftSize
                 );
 
-            silenceStart = null;
-            speechDetected = false;
+
+            silenceStart =
+                null;
+
+
+            speechDetected =
+                false;
 
 
             function checkSilence() {
@@ -799,7 +1646,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ) {
 
                     const normalized =
-                        (data[i] - 128) / 128;
+                        (data[i] - 128) /
+                        128;
+
 
                     sum +=
                         normalized *
@@ -820,13 +1669,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     SILENCE_THRESHOLD
                 ) {
 
-                    speechDetected = true;
+                    speechDetected =
+                        true;
 
-                    silenceStart = null;
+
+                    silenceStart =
+                        null;
                 }
 
 
-                // Silence AFTER speech.
+                // Silence after speech.
 
                 if (
                     speechDetected &&
@@ -835,7 +1687,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 ) {
 
                     if (
-                        silenceStart === null
+                        silenceStart ===
+                        null
                     ) {
 
                         silenceStart =
@@ -857,7 +1710,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             'APEX: Speech ended.'
                         );
 
+
                         stopRecording();
+
 
                         return;
                     }
@@ -889,32 +1744,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function stopSilenceDetection() {
 
-        if (silenceCheckId) {
+        if (
+            silenceCheckId
+        ) {
 
             cancelAnimationFrame(
                 silenceCheckId
             );
 
-            silenceCheckId = null;
+
+            silenceCheckId =
+                null;
         }
 
 
-        silenceStart = null;
+        silenceStart =
+            null;
 
-        speechDetected = false;
+
+        speechDetected =
+            false;
 
 
-        if (audioContext) {
+        if (
+            audioContext
+        ) {
 
             audioContext
                 .close()
                 .catch(() => {});
 
-            audioContext = null;
+
+            audioContext =
+                null;
         }
 
 
-        analyser = null;
+        analyser =
+            null;
     }
 
 
@@ -924,23 +1791,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function startRecording() {
 
-        if (!isMediaRecorderSupported) {
+        if (
+            !isMediaRecorderSupported
+        ) {
 
             showNotification(
                 "Audio recording is not supported."
             );
 
+
             return;
         }
 
 
-        // Prevent duplicate microphone sessions.
+        // Prevent duplicate sessions.
 
         if (
             mediaRecorder &&
             mediaRecorder.state ===
                 'recording'
         ) {
+
             return;
         }
 
@@ -965,10 +1836,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
 
 
-            audioChunks = [];
+            audioChunks =
+                [];
 
 
-            let options = {};
+            let options =
+                {};
 
 
             if (
@@ -1018,7 +1891,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (
                         event.data &&
-                        event.data.size > 0
+                        event.data.size >
+                            0
                     ) {
 
                         audioChunks.push(
@@ -1028,61 +1902,132 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
 
 
-            mediaRecorder.onstop = () => {
+            mediaRecorder.onstop =
+                () => {
 
-                stopSilenceDetection();
-
-
-                const mimeType =
-                    mediaRecorder.mimeType ||
-                    'audio/webm';
+                    stopSilenceDetection();
 
 
-                const audioBlob =
-                    new Blob(
-                        audioChunks,
-                        {
-                            type: mimeType
-                        }
-                    );
+                    const recorder =
+                        mediaRecorder;
 
 
-                if (mediaStream) {
+                    const mimeType =
+                        recorder.mimeType ||
+                        'audio/webm';
 
-                    mediaStream
-                        .getTracks()
-                        .forEach(
-                            track =>
-                                track.stop()
+
+                    const audioBlob =
+                        new Blob(
+                            audioChunks,
+                            {
+                                type: mimeType
+                            }
                         );
 
-                    mediaStream = null;
-                }
+
+                    // Release microphone.
+
+                    if (
+                        mediaStream
+                    ) {
+
+                        mediaStream
+                            .getTracks()
+                            .forEach(
+                                track =>
+                                    track.stop()
+                            );
 
 
-                if (
-                    audioBlob.size === 0
-                ) {
+                        mediaStream =
+                            null;
+                    }
 
-                    showNotification(
-                        "No audio recorded. " +
-                        "Please try again."
+
+                    // -------------------------------------------------
+                    // OK APEX
+                    // -------------------------------------------------
+
+                    if (
+                        stopCommandDetected
+                    ) {
+
+                        console.log(
+                            'APEX: Ignoring recording because ' +
+                            'OK APEX was detected.'
+                        );
+
+
+                        stopCommandDetected =
+                            false;
+
+
+                        try {
+
+                            stopRecognition();
+
+                        } catch (error) {
+
+                            // Ignore.
+                        }
+
+
+                        setState(
+                            'READY'
+                        );
+
+
+                        return;
+                    }
+
+
+                    if (
+                        audioBlob.size ===
+                        0
+                    ) {
+
+                        showNotification(
+                            "No audio recorded. " +
+                            "Please try again."
+                        );
+
+
+                        handleResponseFinished();
+
+
+                        return;
+                    }
+
+
+                    sendVoiceMessage(
+                        audioBlob,
+                        mimeType
                     );
-
-                    handleResponseFinished();
-
-                    return;
-                }
-
-
-                sendVoiceMessage(
-                    audioBlob,
-                    mimeType
-                );
-            };
+                };
 
 
             mediaRecorder.start();
+
+
+            stopCommandDetected =
+                false;
+
+
+            recognitionBuffer =
+                '';
+
+
+            // Start local recognition only
+            // during Conversation Mode.
+
+            if (
+                conversationMode &&
+                recognitionSupported
+            ) {
+
+                startRecognition();
+            }
 
 
             setState(
@@ -1096,7 +2041,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
             startSilenceDetection();
-
 
         } catch (err) {
 
@@ -1123,7 +2067,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             } else if (
                 err.name ===
-                    'NotFoundError'
+                'NotFoundError'
             ) {
 
                 errorMsg =
@@ -1134,6 +2078,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification(
                 errorMsg
             );
+
 
             setState(
                 'READY'
@@ -1161,8 +2106,188 @@ document.addEventListener('DOMContentLoaded', () => {
                 'APEX: Stopping recording.'
             );
 
+
             mediaRecorder.stop();
         }
+    }
+
+
+    // =========================================================
+    // EMOJI -> SPOKEN MEANING
+    // =========================================================
+    //
+    // The UI keeps the emoji.
+    //
+    // Example:
+    //
+    // Screen:
+    // "Great job! 😊"
+    //
+    // Voice:
+    // "Great job! Glad."
+    //
+    // Unknown emojis are removed from speech
+    // so the browser does not pronounce their
+    // Unicode names.
+    //
+
+
+    const EMOJI_SPOKEN_MEANINGS = {
+
+        // Happiness
+        "😊": "glad",
+        "🙂": "happy",
+        "😀": "happy",
+        "😃": "happy",
+        "😄": "happy",
+        "😁": "happy",
+
+        // Laughing
+        "😆": "lol",
+        "😂": "lol",
+        "🤣": "lol",
+
+        // Positive emotions
+        "😅": "relieved",
+        "😇": "blessed",
+        "🥰": "loving",
+        "😍": "love",
+        "🤩": "amazed",
+        "😎": "cool",
+        "🤗": "friendly",
+        "🥹": "touched",
+
+        // Thinking / reactions
+        "🤔": "thinking",
+        "🧐": "curious",
+        "🙄": "annoyed",
+        "😏": "smirking",
+        "🤭": "giggle",
+        "🫡": "respect",
+        "🫠": "melting",
+
+        // Negative emotions
+        "😢": "sad",
+        "😭": "crying",
+        "😡": "angry",
+        "😤": "frustrated",
+        "😱": "shocked",
+        "😳": "embarrassed",
+        "😴": "sleepy",
+
+        // Reactions
+        "👍": "thumbs up",
+        "👎": "thumbs down",
+        "👏": "clap",
+        "🙌": "celebration",
+        "🙏": "please",
+        "🤝": "agreement",
+        "💪": "strong",
+        "✌️": "peace",
+        "👌": "okay",
+        "👀": "looking",
+
+        // Love
+        "❤️": "love",
+        "🩷": "love",
+        "💙": "love",
+        "💚": "love",
+        "💛": "love",
+        "🖤": "love",
+        "❤️‍🔥": "passion",
+
+        // Common symbols
+        "🔥": "fire",
+        "⭐": "star",
+        "🌟": "great",
+        "✨": "sparkle",
+        "💯": "perfect",
+        "🎯": "target",
+        "🚀": "rocket",
+        "💡": "idea",
+        "🎉": "celebration",
+        "🎊": "celebration",
+        "🏆": "trophy",
+        "✅": "done",
+        "❌": "wrong",
+        "⚠️": "warning",
+        "❗": "important",
+        "❓": "question",
+
+        // Funny / casual
+        "😜": "playful",
+        "😋": "tasty",
+        "🤪": "crazy",
+        "🤦": "facepalm",
+        "🤷": "I don't know",
+        "🙈": "shy",
+        "💀": "dead laughing",
+        "😈": "mischievous"
+    };
+
+
+    function convertEmojiForSpeech(
+        text
+    ) {
+
+        if (!text) {
+            return '';
+        }
+
+
+        let speechText =
+            text;
+
+
+        // Replace known emojis.
+
+        for (
+            const [
+                emoji,
+                meaning
+            ]
+            of Object.entries(
+                EMOJI_SPOKEN_MEANINGS
+            )
+        ) {
+
+            speechText =
+                speechText
+                    .split(emoji)
+                    .join(
+                        ` ${meaning} `
+                    );
+        }
+
+
+        // Remove remaining Unicode emojis.
+        //
+        // This prevents TTS from saying:
+        //
+        // "rocket"
+        // "red heart"
+        // "smiling face..."
+        //
+        // for emojis we don't explicitly support.
+
+        speechText =
+            speechText
+                .replace(
+                    /[\u{1F300}-\u{1FAFF}]/gu,
+                    ''
+                )
+                .replace(
+                    /[\u{2600}-\u{27BF}]/gu,
+                    ''
+                )
+                .replace(
+                    /\s+/g,
+                    ' '
+                )
+                .trim();
+
+
+        return speechText;
     }
 
 
@@ -1170,7 +2295,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // TEXT TO SPEECH
     // =========================================================
 
-    function speakResponse(text) {
+    function speakResponse(
+        text
+    ) {
 
         if (
             !('speechSynthesis' in window)
@@ -1185,13 +2312,29 @@ document.addEventListener('DOMContentLoaded', () => {
         window.speechSynthesis.cancel();
 
 
-        const utterance =
-            new SpeechSynthesisUtterance(
+        // Convert emojis only for speech.
+        //
+        // The original text remains unchanged
+        // in the chat UI.
+
+        const speechText =
+            convertEmojiForSpeech(
                 text
             );
 
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
+
+        const utterance =
+            new SpeechSynthesisUtterance(
+                speechText
+            );
+
+
+        utterance.rate =
+            1.0;
+
+
+        utterance.pitch =
+            1.0;
 
 
         const voices =
@@ -1222,31 +2365,36 @@ document.addEventListener('DOMContentLoaded', () => {
             );
 
 
-        if (preferredVoice) {
+        if (
+            preferredVoice
+        ) {
 
             utterance.voice =
                 preferredVoice;
         }
 
 
-        utterance.onstart = () => {
+        utterance.onstart =
+            () => {
 
-            setState(
-                'SPEAKING'
-            );
-        };
-
-
-        utterance.onend = () => {
-
-            handleResponseFinished();
-        };
+                setState(
+                    'SPEAKING'
+                );
+            };
 
 
-        utterance.onerror = () => {
+        utterance.onend =
+            () => {
 
-            handleResponseFinished();
-        };
+                handleResponseFinished();
+            };
+
+
+        utterance.onerror =
+            () => {
+
+                handleResponseFinished();
+            };
 
 
         window.speechSynthesis.speak(
@@ -1261,12 +2409,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startConversationMode() {
 
-        if (conversationMode) {
+        if (
+            conversationMode
+        ) {
+
             return;
         }
 
 
-        conversationMode = true;
+        conversationMode =
+            true;
+
+
+        stopCommandDetected =
+            false;
+
+
+        recognitionBuffer =
+            '';
+
+
+        // Switch from chat to audio UI.
+
+        setConversationVisualMode(
+            true
+        );
 
 
         showNotification(
@@ -1284,22 +2451,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Start listening.
 
-        setTimeout(() => {
+        setTimeout(
+            () => {
 
-            if (conversationMode) {
-                startRecording();
-            }
+                if (
+                    conversationMode
+                ) {
 
-        }, 600);
+                    startRecording();
+                }
+
+            },
+            600
+        );
     }
 
 
     function stopConversationMode() {
 
-        conversationMode = false;
+        conversationMode =
+            false;
 
 
-        // Stop recording if active.
+        // Stop recognition.
+
+        try {
+
+            stopRecognition();
+
+        } catch (error) {
+
+            // Ignore.
+        }
+
+
+        // Stop recording.
 
         if (
             mediaRecorder &&
@@ -1322,6 +2508,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
+        // Restore chat interface.
+
+        setConversationVisualMode(
+            false
+        );
+
+
         setState(
             'READY'
         );
@@ -1336,7 +2529,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function toggleConversationMode() {
 
-        if (conversationMode) {
+        if (
+            conversationMode
+        ) {
 
             stopConversationMode();
 
@@ -1350,18 +2545,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
     // MICROPHONE BUTTON
     // =========================================================
+    //
+    // Important:
+    //
+    // If APEX is speaking and the user clicks the mic:
+    //
+    // APEX stops speaking immediately.
+    // Conversation Mode remains active.
+    // Microphone starts listening immediately.
+    //
+    // This is the manual "barge-in" feature.
+    //
+
 
     micBtn.addEventListener(
         'click',
         () => {
 
-            // If APEX is speaking,
-            // clicking the microphone interrupts it.
+            // -------------------------------------------------
+            // INTERRUPT APEX WHILE SPEAKING
+            // -------------------------------------------------
 
             if (
                 currentState ===
                 'SPEAKING'
             ) {
+
+                console.log(
+                    'APEX: Speech interrupted by user.'
+                );
+
 
                 if (
                     'speechSynthesis' in
@@ -1376,11 +2589,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     conversationMode
                 ) {
 
-                    setTimeout(
-                        () =>
-                            startRecording(),
-                        300
-                    );
+                    // Start listening immediately.
+                    startRecording();
 
                 } else {
 
@@ -1394,8 +2604,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
 
-            // If currently listening,
-            // clicking microphone manually stops it.
+            // -------------------------------------------------
+            // STOP CURRENT RECORDING
+            // -------------------------------------------------
 
             if (
                 currentState ===
@@ -1408,7 +2619,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
 
-            // Normal mode.
+            // -------------------------------------------------
+            // NORMAL MODE
+            // -------------------------------------------------
 
             if (
                 currentState ===
@@ -1426,7 +2639,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // CONVERSATION BUTTON
     // =========================================================
 
-    if (conversationBtn) {
+    if (
+        conversationBtn
+    ) {
 
         conversationBtn.addEventListener(
             'click',
@@ -1492,7 +2707,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // INITIALIZE
     // =========================================================
 
+    createConversationVisual();
+
     setTimeAwareWelcome();
 
 });
-

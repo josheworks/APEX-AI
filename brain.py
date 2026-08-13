@@ -1,39 +1,106 @@
-import os
+import base64
 import json
+import os
+import threading
+from typing import Any
+
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from openai import OpenAI
+
+import memory_manager
 import tools
 
-# Load environment variables from .env file
+
+# ============================================================
+# ENVIRONMENT
+# ============================================================
+
 load_dotenv()
 
-# APEX Jolly, Friendly & Helpful System Personality Instruction
+
+# ============================================================
+# LIMITS
+# ============================================================
+
+MAX_CONVERSATION_MESSAGES = 20
+MAX_TOOL_ROUNDS = 5
+
+
+# ============================================================
+# CONVERSATION HISTORY
+# ============================================================
+
+_conversation_history: list[dict[str, str]] = []
+_conversation_lock = threading.Lock()
+
+
+# ============================================================
+# APEX PERSONALITY
+# ============================================================
+
 SYSTEM_INSTRUCTION = (
     "APEX stands for Advanced Personal Executive.\n"
-    "APEX is a jolly, friendly, cheerful, warm, intelligent, and helpful personal AI executive assistant.\n\n"
+    "APEX is a jolly, friendly, cheerful, warm, intelligent, "
+    "and helpful personal AI executive assistant.\n\n"
+
     "Personality & Tone Guidelines:\n"
     "- Sound like a smart friend who happens to be extremely capable.\n"
     "- Friendly, warm, slightly playful, helpful, and natural.\n"
-    "- Use conversational responses (e.g., 'Sure thing!', 'Got it!', 'On it!', 'Here you go!', 'Done!').\n"
+    "- Use conversational responses "
+    "(e.g., 'Sure thing!', 'Got it!', 'On it!', 'Here you go!', 'Done!').\n"
     "- NEVER sound robotic, commanding, strict, or military.\n"
     "- Do NOT use emojis in every single response; use light humor occasionally.\n"
-    "- For simple requests, keep responses brief. For educational questions, explain clearly.\n"
-    "- Do NOT use web_search for normal questions you can answer yourself.\n"
-    "- Use web_search when the user explicitly asks for web/search,"
-    "OR when answering requires current/latest/real-time information..\n"
-    "- Crucial Rule: APEX must NEVER claim that it performed an action when it did not."
+    "- For simple requests, keep responses brief. "
+    "For educational questions, explain clearly.\n"
+
+    "- Do NOT use web_search for normal questions "
+    "that can be answered reliably from your existing knowledge.\n"
+
+    "- ALWAYS use web_search for requests involving current, latest, "
+    "today's, recent, breaking, live, trending, news, prices, weather, "
+    "events, or other time-sensitive information.\n"
+
+    "- NEVER invent, assume, or append a date or year to the user's "
+    "search query unless the user explicitly provided that date or year.\n"
+
+    "- For queries containing 'today', 'latest', 'current', or 'recent', "
+    "preserve the user's wording and do not convert it into an old specific date.\n"
+
+    "- If the user says 'today', search for today's information based "
+    "on the actual current date, not a remembered date.\n"
+
+    "- When the user asks for current/latest/news information, "
+    "never rely on memory alone. Use the web_search tool first.\n"
+
+    "- For current/news searches, prefer recent results "
+    "and pay attention to publication dates.\n"
+
+    "- Crucial Rule: APEX must NEVER claim that it performed "
+    "an action when it did not."
 )
 
-# Custom exception class for Gemini quota exhaustion
+
+# ============================================================
+# EXCEPTIONS
+# ============================================================
+
 class QuotaExhaustedException(Exception):
     pass
-def _get_groq_client():
+
+
+# ============================================================
+# CLIENTS
+# ============================================================
+
+def _get_groq_client() -> OpenAI:
     api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
-        raise ValueError("GROQ_API_KEY is not configured.")
+        raise ValueError(
+            "GROQ_API_KEY is not configured."
+        )
 
     return OpenAI(
         api_key=api_key,
@@ -41,331 +108,971 @@ def _get_groq_client():
     )
 
 
-def _get_openrouter_client():
+def _get_openrouter_client() -> OpenAI:
     api_key = os.getenv("OPENROUTER_API_KEY")
 
     if not api_key:
-        raise ValueError("OPENROUTER_API_KEY is not configured.")
+        raise ValueError(
+            "OPENROUTER_API_KEY is not configured."
+        )
 
     return OpenAI(
         api_key=api_key,
         base_url="https://openrouter.ai/api/v1"
     )
 
-def _get_validated_api_key_and_model():
-    """Helper to validate API key and retrieve model name."""
-    api_key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-    if not api_key or api_key.strip() == "" or api_key == "your_gemini_api_key_here":
+def _get_validated_gemini_api_key_and_model():
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    model_name = os.getenv(
+        "GEMINI_MODEL",
+        "gemini-3.6-flash"
+    )
+
+    if (
+        not api_key
+        or api_key.strip() == ""
+        or api_key == "your_gemini_api_key_here"
+    ):
         raise ValueError(
-            "GEMINI_API_KEY is not configured or contains placeholder value. "
-            "Please set a valid API key in your .env file."
+            "GEMINI_API_KEY is not configured or contains "
+            "placeholder value. Please set a valid API key."
         )
 
     return api_key, model_name
 
 
+# ============================================================
+# ERROR HELPERS
+# ============================================================
+
 def _check_quota_error(exception: Exception) -> bool:
     """
-    Returns True if the exception is a Gemini 429 RESOURCE_EXHAUSTED quota error.
-    Checks both daily quota and per-minute rate limit exhaustion.
+    Detect quota/rate-limit errors.
+
+    This is retained for diagnostics, but provider fallback
+    no longer depends only on quota errors.
     """
+
     msg = str(exception)
-    return "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower()
+
+    return (
+        "429" in msg
+        or "RESOURCE_EXHAUSTED" in msg
+        or "quota" in msg.lower()
+        or "rate limit" in msg.lower()
+        or "rate_limit" in msg.lower()
+    )
 
 
-def _format_tool_response(tool_name: str, tool_result: dict) -> str:
-    """
-    Converts a tool execution result into a friendly APEX natural-language response.
-    This avoids a second Gemini API call for every tool invocation.
-    """
-    if not tool_result.get("success", False):
-        error = tool_result.get("error", "Something went wrong.")
-        return f"Hmm, I ran into a problem with that — {error} Want to try again?"
+# ============================================================
+# CONVERSATION HISTORY
+# ============================================================
 
-    result = tool_result.get("result", "")
+def _append_conversation(
+    role: str,
+    content: str
+) -> None:
 
-    RESPONSES = {
-        "get_current_time": lambda r: r,
-        "get_current_date": lambda r: r,
-        "open_website":     lambda r: f"Sure! {r}",
-        "web_search":       lambda r: f"Got it! {r}",
-        "calculate":        lambda r: f"Here you go: {r}",
-        "get_system_info":  lambda r: f"Here's what I found:\n{r}",
-        "open_local_app":   lambda r: f"Sure! {r}",
-    }
+    if not content:
+        return
 
-    formatter = RESPONSES.get(tool_name)
-    if formatter:
-        return formatter(result)
-    return result if result else "Done!"
-def _ask_groq(user_message: str) -> tuple[str, str | None]:
+    with _conversation_lock:
 
-    client = _get_groq_client()
+        _conversation_history.append(
+            {
+                "role": role,
+                "content": content
+            }
+        )
 
-    model = os.getenv(
-        "GROQ_MODEL",
-        "openai/gpt-oss-20b"
+        if (
+            len(_conversation_history)
+            > MAX_CONVERSATION_MESSAGES
+        ):
+
+            excess = (
+                len(_conversation_history)
+                - MAX_CONVERSATION_MESSAGES
+            )
+
+            _conversation_history[:] = (
+                _conversation_history[excess:]
+            )
+
+
+def _get_conversation_context():
+    with _conversation_lock:
+        return list(_conversation_history)
+
+
+# ============================================================
+# MEMORY / SYSTEM MESSAGES
+# ============================================================
+
+def _build_system_messages():
+    memory = (
+        memory_manager.load_user_memory()
+    )
+
+    memory_summary = (
+        memory_manager.build_memory_summary(
+            memory
+        )
     )
 
     messages = [
         {
             "role": "system",
             "content": SYSTEM_INSTRUCTION
-        },
+        }
+    ]
+
+    if memory_summary:
+
+        messages.append(
+            {
+                "role": "system",
+                "content":
+                    f"Relevant stored memory: "
+                    f"{memory_summary}"
+            }
+        )
+
+    return messages
+
+
+def _build_message_sequence(
+    user_message: str
+):
+    messages = _build_system_messages()
+
+    messages.extend(
+        _get_conversation_context()
+    )
+
+    messages.append(
         {
             "role": "user",
             "content": user_message
         }
-    ]
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        tools=tools.get_openai_tools(),
-        tool_choice="auto"
     )
 
-    message = response.choices[0].message
+    return messages
 
-    if not message.tool_calls:
 
-        if not message.content:
-            raise RuntimeError("Groq returned an empty response.")
+# ============================================================
+# TOOL RESPONSE FORMATTER
+# ============================================================
 
-        return message.content.strip(), None
+def _format_tool_response(
+    tool_name: str,
+    tool_result: dict
+) -> str:
 
-    messages.append(message)
+    if not tool_result.get(
+        "success",
+        False
+    ):
 
-    first_tool_name = None
-    last_tool_result = None
+        error = tool_result.get(
+            "error",
+            "Something went wrong."
+        )
 
-    for tool_call in message.tool_calls:
+        return (
+            f"Hmm, I ran into a problem with that — "
+            f"{error} Want to try again?"
+        )
 
-        tool_name = tool_call.function.name
+    result = tool_result.get(
+        "result",
+        ""
+    )
 
-        if first_tool_name is None:
-            first_tool_name = tool_name
+    responses = {
+
+        "get_current_time":
+            lambda r: r,
+
+        "get_current_date":
+            lambda r: r,
+
+        "open_website":
+            lambda r: f"Sure! {r}",
+
+        "web_search":
+            lambda r: f"Got it! {r}",
+
+        "calculate":
+            lambda r: f"Here you go: {r}",
+
+        "get_system_info":
+            lambda r: f"Here's what I found:\n{r}",
+
+        "open_local_app":
+            lambda r: f"Sure! {r}",
+    }
+
+    formatter = responses.get(
+        tool_name
+    )
+
+    if formatter:
+        return formatter(result)
+
+    return (
+        result
+        if result
+        else "Done!"
+    )
+
+
+# ============================================================
+# TOOL CALL NORMALIZATION
+# ============================================================
+
+def _normalize_tool_call(
+    tool_call: Any
+):
+    if not tool_call:
+        return None
+
+
+    # Gemini function call
+
+    if (
+        hasattr(tool_call, "name")
+        and hasattr(tool_call, "args")
+    ):
+
+        return {
+            "name": tool_call.name,
+            "arguments": (
+                tool_call.args
+                or {}
+            )
+        }
+
+
+    # Dictionary format
+
+    if isinstance(
+        tool_call,
+        dict
+    ):
+
+        function = (
+            tool_call.get("function")
+            or tool_call.get("name")
+        )
+
+        args = (
+            tool_call.get("arguments")
+            or tool_call.get("args")
+            or {}
+        )
+
+        if isinstance(
+            function,
+            dict
+        ):
+
+            tool_name = function.get(
+                "name"
+            )
+
+        else:
+
+            tool_name = function
+
+        if not tool_name:
+            return None
+
+        if isinstance(args, str):
+
+            try:
+                args = json.loads(args)
+
+            except Exception:
+                args = {}
+
+        return {
+            "name": tool_name,
+            "arguments": args or {}
+        }
+
+
+    # OpenAI/Groq/OpenRouter object
+
+    function = getattr(
+        tool_call,
+        "function",
+        None
+    )
+
+    if function is not None:
+
+        name = getattr(
+            function,
+            "name",
+            None
+        )
+
+        args = getattr(
+            function,
+            "arguments",
+            None
+        )
 
         try:
-            arguments = json.loads(
-                tool_call.function.arguments or "{}"
+
+            args = json.loads(
+                args or "{}"
             )
-        except json.JSONDecodeError:
-            arguments = {}
 
-        last_tool_result = tools.execute_tool(
-            tool_name,
-            arguments
-        )
+        except Exception:
 
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "name": tool_name,
-                "content": json.dumps(last_tool_result)
+            args = {}
+
+        if name:
+
+            return {
+                "name": name,
+                "arguments": args
             }
-        )
 
-    final_response = client.chat.completions.create(
-        model=model,
-        messages=messages
+    return None
+
+
+# ============================================================
+# OPENAI-COMPATIBLE TOOL LOOP
+# ============================================================
+
+def _run_openai_compatible_tool_loop(
+    client: Any,
+    model: str,
+    user_message: str
+):
+    """
+    Multi-round tool execution loop.
+
+    Used by:
+        1. OpenRouter
+        2. Groq
+
+    Supports multiple tool calls and
+    sends tool results back to the model.
+    """
+
+    messages = _build_message_sequence(
+        user_message
     )
 
-    final_message = final_response.choices[0].message
+    final_tool_name = None
+    last_tool_result = None
 
-    if not final_message.content:
-        return (
-            _format_tool_response(
-                first_tool_name,
-                last_tool_result
-            ),
-            first_tool_name
+
+    for tool_round in range(
+        1,
+        MAX_TOOL_ROUNDS + 1
+    ):
+
+        response = (
+            client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=tools.get_openai_tools(),
+                tool_choice="auto"
+            )
         )
 
-    return final_message.content.strip(), first_tool_name
 
-def _ask_openrouter(user_message: str) -> tuple[str, str | None]:
+        message = (
+            response.choices[0].message
+        )
+
+
+        tool_calls = getattr(
+            message,
+            "tool_calls",
+            None
+        )
+
+
+        # Final text response.
+
+        if not tool_calls:
+
+            content = getattr(
+                message,
+                "content",
+                None
+            )
+
+            if content:
+
+                return (
+                    content.strip(),
+                    final_tool_name
+                )
+
+            break
+
+
+        # Preserve assistant tool-call message.
+
+        assistant_message = {
+            "role": "assistant",
+            "content":
+                getattr(
+                    message,
+                    "content",
+                    ""
+                ) or ""
+        }
+
+
+        if tool_calls:
+
+            assistant_message[
+                "tool_calls"
+            ] = tool_calls
+
+
+        messages.append(
+            assistant_message
+        )
+
+
+        any_executed = False
+
+
+        # Execute EVERY tool call.
+
+        for tool_call in tool_calls:
+
+            normalized = (
+                _normalize_tool_call(
+                    tool_call
+                )
+            )
+
+            if not normalized:
+                continue
+
+
+            tool_name = normalized[
+                "name"
+            ]
+
+
+            if final_tool_name is None:
+
+                final_tool_name = (
+                    tool_name
+                )
+
+
+            last_tool_result = (
+                tools.execute_tool(
+                    tool_name,
+                    normalized[
+                        "arguments"
+                    ]
+                )
+            )
+
+
+            # OpenAI-compatible tool result.
+
+            tool_call_id = getattr(
+                tool_call,
+                "id",
+                None
+            )
+
+
+            tool_message = {
+                "role": "tool",
+                "content": json.dumps(
+                    last_tool_result
+                )
+            }
+
+
+            if tool_call_id:
+
+                tool_message[
+                    "tool_call_id"
+                ] = tool_call_id
+
+
+            messages.append(
+                tool_message
+            )
+
+
+            any_executed = True
+
+
+        if not any_executed:
+            break
+
+
+    # Safety fallback if provider stopped
+    # after tool execution.
+
+    if (
+        last_tool_result is not None
+        and final_tool_name is not None
+    ):
+
+        return (
+            _format_tool_response(
+                final_tool_name,
+                last_tool_result
+            ),
+            final_tool_name
+        )
+
+
+    raise RuntimeError(
+        "Unable to produce a response "
+        "after tool execution."
+    )
+
+
+# ============================================================
+# OPENROUTER CHAT
+# ============================================================
+
+def _ask_openrouter(
+    user_message: str
+):
+    """
+    PRIMARY CHAT PROVIDER.
+    """
 
     client = _get_openrouter_client()
 
     model = os.getenv(
         "OPENROUTER_MODEL",
-        "openrouter/free"
+        "openrouter/auto"
     )
 
-    messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_INSTRUCTION
-        },
-        {
-            "role": "user",
-            "content": user_message
-        }
-    ]
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        tools=tools.get_openai_tools(),
-        tool_choice="auto"
+    return _run_openai_compatible_tool_loop(
+        client,
+        model,
+        user_message
     )
 
-    message = response.choices[0].message
 
-    if not message.tool_calls:
+# ============================================================
+# GROQ CHAT
+# ============================================================
 
-        if not message.content:
-            raise RuntimeError("OpenRouter returned an empty response.")
+def _ask_groq(
+    user_message: str
+):
+    """
+    SECOND CHAT PROVIDER.
+    """
 
-        return message.content.strip(), None
+    client = _get_groq_client()
 
-    messages.append(message)
+    model = os.getenv(
+        "GROQ_MODEL",
+        "llama-3.3-70b-versatile"
+    )
 
-    first_tool_name = None
+    return _run_openai_compatible_tool_loop(
+        client,
+        model,
+        user_message
+    )
+
+
+# ============================================================
+# GEMINI CHAT
+# ============================================================
+
+def _ask_gemini(
+    user_message: str
+):
+    """
+    THIRD CHAT PROVIDER.
+    """
+
+    api_key, model_name = (
+        _get_validated_gemini_api_key_and_model()
+    )
+
+    client = genai.Client(
+        api_key=api_key
+    )
+
+    return _run_gemini_tool_loop(
+        client,
+        model_name,
+        user_message
+    )
+
+
+# ============================================================
+# GEMINI TOOL LOOP
+# ============================================================
+
+def _run_gemini_tool_loop(
+    client: Any,
+    model: str,
+    user_message: str
+):
+    """
+    Multi-round Gemini tool execution.
+    """
+
+    memory = (
+        memory_manager.load_user_memory()
+    )
+
+    memory_summary = (
+        memory_manager.build_memory_summary(
+            memory
+        )
+    )
+
+    final_tool_name = None
     last_tool_result = None
 
-    for tool_call in message.tool_calls:
-
-        tool_name = tool_call.function.name
-
-        if first_tool_name is None:
-            first_tool_name = tool_name
-
-        try:
-            arguments = json.loads(
-                tool_call.function.arguments or "{}"
-            )
-        except json.JSONDecodeError:
-            arguments = {}
-
-        last_tool_result = tools.execute_tool(
-            tool_name,
-            arguments
-        )
-
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "name": tool_name,
-                "content": json.dumps(last_tool_result)
-            }
-        )
-
-    final_response = client.chat.completions.create(
-        model=model,
-        messages=messages
+    conversation_context = (
+        _get_conversation_context()
     )
 
-    final_message = final_response.choices[0].message
 
-    if not final_message.content:
-        return (
-            _format_tool_response(
-                first_tool_name,
-                last_tool_result
-            ),
-            first_tool_name
+    for tool_round in range(
+        1,
+        MAX_TOOL_ROUNDS + 1
+    ):
+
+        if tool_round == 1:
+
+            content = user_message
+
+        else:
+
+            context_text = (
+                "Previous conversation:\n"
+            )
+
+            for msg in (
+                conversation_context[-4:]
+            ):
+
+                context_text += (
+                    f"{msg['role'].upper()}: "
+                    f"{msg['content']}\n"
+                )
+
+
+            if memory_summary:
+
+                context_text += (
+                    f"\nRelevant stored memory: "
+                    f"{memory_summary}\n"
+                )
+
+
+            context_text += (
+                "\nNow please process the "
+                "following and provide a natural "
+                "language response:\n"
+                f"{user_message}"
+            )
+
+
+            content = context_text
+
+
+        response = (
+            client.models.generate_content(
+                model=model,
+                contents=content,
+                config=types.GenerateContentConfig(
+                    system_instruction=
+                        SYSTEM_INSTRUCTION,
+                    tools=
+                        tools.get_gemini_tools()
+                )
+            )
         )
 
-    return final_message.content.strip(), first_tool_name
-def _fallback_response(
-    user_message: str
-) -> tuple[str, str | None]:
 
-    providers = [
-        ("Groq", _ask_groq),
-        ("OpenRouter", _ask_openrouter),
+        function_calls = getattr(
+            response,
+            "function_calls",
+            None
+        )
+
+
+        if not function_calls:
+
+            if response.text:
+
+                return (
+                    response.text.strip(),
+                    final_tool_name
+                )
+
+            break
+
+
+        any_executed = False
+
+
+        for call in function_calls:
+
+            normalized = (
+                _normalize_tool_call(
+                    call
+                )
+            )
+
+            if not normalized:
+                continue
+
+
+            tool_name = normalized[
+                "name"
+            ]
+
+
+            if final_tool_name is None:
+
+                final_tool_name = (
+                    tool_name
+                )
+
+
+            last_tool_result = (
+                tools.execute_tool(
+                    tool_name,
+                    normalized[
+                        "arguments"
+                    ]
+                )
+            )
+
+
+            _append_conversation(
+                "assistant",
+                f"[Executing {tool_name} tool...]"
+            )
+
+
+            _append_conversation(
+                "tool",
+                json.dumps(
+                    last_tool_result
+                )
+            )
+
+
+            any_executed = True
+
+
+        if not any_executed:
+            break
+
+
+        conversation_context = (
+            _get_conversation_context()
+        )
+
+
+    if (
+        last_tool_result is not None
+        and final_tool_name is not None
+    ):
+
+        return (
+            _format_tool_response(
+                final_tool_name,
+                last_tool_result
+            ),
+            final_tool_name
+        )
+
+
+    raise RuntimeError(
+        "Unable to produce a response "
+        "after tool execution."
+    )
+
+
+# ============================================================
+# CHAT PROVIDER FALLBACK
+# ============================================================
+
+def _get_chat_providers():
+
+    return [
+        (
+            "OpenRouter",
+            _ask_openrouter
+        ),
+        (
+            "Groq",
+            _ask_groq
+        ),
+        (
+            "Gemini",
+            _ask_gemini
+        ),
     ]
+
+
+def _fallback_chat_response(
+    user_message: str
+):
+    """
+    Provider priority:
+
+        OpenRouter
+            ↓
+        Groq
+            ↓
+        Gemini
+
+    Any provider error triggers the next provider.
+    """
 
     errors = []
 
-    for provider_name, provider_function in providers:
+
+    for (
+        provider_name,
+        provider_function
+    ) in _get_chat_providers():
+
         try:
-            response = provider_function(user_message)
 
             print(
-                f"[APEX] Fallback provider: {provider_name}"
+                f"[APEX] Trying chat provider: "
+                f"{provider_name}"
             )
+
+
+            response = (
+                provider_function(
+                    user_message
+                )
+            )
+
+
+            print(
+                f"[APEX] Chat provider succeeded: "
+                f"{provider_name}"
+            )
+
 
             return response
 
-        except Exception as e:
+
+        except Exception as error:
 
             print(
-                f"[APEX] {provider_name} failed: {e}"
-            )
-            errors.append(
-                f"{provider_name}: {e}"
+                f"[APEX] {provider_name} failed: "
+                f"{error}"
             )
 
+
+            errors.append(
+                f"{provider_name}: {error}"
+            )
+
+
     raise RuntimeError(
-        "All fallback AI providers failed.\n"
+        "All chat providers failed.\n"
         + "\n".join(errors)
     )
 
-def get_ai_response(user_message: str) -> tuple[str, str | None]:
-    """
-    Communicates with the configured LLM API (Google Gemini) to generate
-    an AI response and execute allowlisted tools if requested.
 
-    :param user_message: The text input from the user.
-    :return: A tuple of (response_text, tool_used_name_or_None).
-    :raises QuotaExhaustedException: If Gemini 429 quota limit is hit.
-    :raises RuntimeError: For other LLM API errors.
+# ============================================================
+# MAIN AI RESPONSE
+# ============================================================
+
+def get_ai_response(
+    user_message: str
+):
     """
-    api_key, model_name = _get_validated_api_key_and_model()
+    Main APEX AI entry point.
+
+    Priority:
+
+        1. OpenRouter
+        2. Groq
+        3. Gemini
+    """
+
+    if (
+        not user_message
+        or not user_message.strip()
+    ):
+
+        raise ValueError(
+            "User message cannot be empty."
+        )
+
+
+    # Update memory.
+
+    memory_manager.update_user_memory(
+        user_message
+    )
+
+
+    # Add user message once.
+
+    _append_conversation(
+        "user",
+        user_message
+    )
+
 
     try:
-        client = genai.Client(api_key=api_key)
-        gemini_tools = tools.get_gemini_tools()
 
-        response = client.models.generate_content(
-            model=model_name,
-            contents=user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                tools=gemini_tools
+        final_text, tool_used = (
+            _fallback_chat_response(
+                user_message
             )
         )
 
-        # Check if Gemini requested a function call
-        if response.function_calls and len(response.function_calls) > 0:
-            call = response.function_calls[0]
-            tool_name = call.name
-            tool_args = call.args or {}
 
-            # Execute allowlisted tool safely
-            tool_result = tools.execute_tool(tool_name, tool_args)
+        _append_conversation(
+            "assistant",
+            final_text
+        )
 
-            # Format response locally — no second API call needed
-            final_text = _format_tool_response(tool_name, tool_result)
-            return final_text, tool_name
 
-        if not response.text:
-            raise RuntimeError("The model returned an empty response.")
+        return (
+            final_text,
+            tool_used
+        )
 
-        return response.text.strip(), None
 
-    except Exception as e:
-        if _check_quota_error(e):
-            print("[APEX] Gemini quota exhausted.")
-            print("[APEX] Switching to fallback providers...")
+    except Exception as error:
 
-            try:
-                return _fallback_response(user_message)
-            except Exception as fallback_error:
-                raise RuntimeError(
-                    "Gemini quota exhausted and all "
-                    f"fallback providers failed: {fallback_error}"
-                )
+        raise RuntimeError(
+            f"All LLM providers failed: "
+            f"{error}"
+        )
 
-        raise RuntimeError(f"LLM API Error: {str(e)}")
 
+# ============================================================
+# GROQ WHISPER TRANSCRIPTION
+# ============================================================
 
 def _transcribe_with_groq(
     audio_bytes: bytes,
@@ -374,30 +1081,259 @@ def _transcribe_with_groq(
 
     client = _get_groq_client()
 
+
     model = os.getenv(
         "GROQ_STT_MODEL",
         "whisper-large-v3-turbo"
     )
 
-    filename = "apex_audio.webm"
 
-    transcription = client.audio.transcriptions.create(
-        file=(
-            filename,
-            audio_bytes,
-            mime_type
-        ),
-        model=model,
-        response_format="json",
-        temperature=0.0
+    filename = (
+        "apex_audio.webm"
     )
 
-    if not transcription.text:
+
+    transcription = (
+        client.audio.transcriptions.create(
+            file=(
+                filename,
+                audio_bytes,
+                mime_type
+            ),
+            model=model,
+            response_format="json",
+            temperature=0.0
+        )
+    )
+
+
+    text = getattr(
+        transcription,
+        "text",
+        None
+    )
+
+
+    if not text:
+
         raise RuntimeError(
             "Groq returned an empty transcription."
         )
 
-    return transcription.text.strip()
+
+    return text.strip()
+
+
+# ============================================================
+# OPENROUTER TRANSCRIPTION
+# ============================================================
+
+def _transcribe_with_openrouter(
+    audio_bytes: bytes,
+    mime_type: str
+) -> str:
+    """
+    PRIMARY VOICE TRANSCRIPTION PROVIDER.
+
+    Uses OpenRouter's dedicated transcription endpoint
+    through the OpenAI-compatible client.
+
+    OpenRouter supports multipart audio uploads and
+    transcription models such as Whisper.
+    """
+
+    client = _get_openrouter_client()
+
+
+    model = os.getenv(
+        "OPENROUTER_STT_MODEL",
+        "openai/whisper-large-v3"
+    )
+
+
+    # OpenAI-compatible transcription endpoint.
+
+    filename = (
+        _audio_filename_from_mime(
+            mime_type
+        )
+    )
+
+
+    transcription = (
+        client.audio.transcriptions.create(
+            file=(
+                filename,
+                audio_bytes,
+                mime_type
+            ),
+            model=model,
+            response_format="json",
+            temperature=0.0
+        )
+    )
+
+
+    text = getattr(
+        transcription,
+        "text",
+        None
+    )
+
+
+    if not text:
+
+        raise RuntimeError(
+            "OpenRouter returned an empty transcription."
+        )
+
+
+    return text.strip()
+
+
+# ============================================================
+# GEMINI AUDIO TRANSCRIPTION
+# ============================================================
+
+def _transcribe_with_gemini(
+    audio_bytes: bytes,
+    mime_type: str
+) -> str:
+    """
+    THIRD VOICE TRANSCRIPTION PROVIDER.
+    """
+
+    api_key, model_name = (
+        _get_validated_gemini_api_key_and_model()
+    )
+
+
+    client = genai.Client(
+        api_key=api_key
+    )
+
+
+    audio_part = (
+        types.Part.from_bytes(
+            data=audio_bytes,
+            mime_type=mime_type
+        )
+    )
+
+
+    prompt = (
+        "Transcribe the spoken audio in this recording "
+        "accurately into plain text. "
+        "Output ONLY the raw transcription text "
+        "without commentary, intro, or quotation marks. "
+        "If no speech is detected, respond with "
+        "'[No speech detected]'."
+    )
+
+
+    response = (
+        client.models.generate_content(
+            model=model_name,
+            contents=[
+                audio_part,
+                prompt
+            ]
+        )
+    )
+
+
+    if not response.text:
+
+        raise RuntimeError(
+            "Gemini audio transcription returned "
+            "an empty result."
+        )
+
+
+    return response.text.strip()
+
+
+# ============================================================
+# AUDIO FILENAME
+# ============================================================
+
+def _audio_filename_from_mime(
+    mime_type: str
+) -> str:
+
+    clean_mime = (
+        mime_type
+        .split(";")[0]
+        .strip()
+        .lower()
+    )
+
+
+    extensions = {
+
+        "audio/webm":
+            "webm",
+
+        "audio/webm;codecs=opus":
+            "webm",
+
+        "audio/mp4":
+            "mp4",
+
+        "audio/mpeg":
+            "mp3",
+
+        "audio/mp3":
+            "mp3",
+
+        "audio/wav":
+            "wav",
+
+        "audio/x-wav":
+            "wav",
+
+        "audio/ogg":
+            "ogg",
+
+        "audio/flac":
+            "flac",
+
+        "audio/aac":
+            "aac",
+    }
+
+
+    extension = extensions.get(
+        clean_mime,
+        "webm"
+    )
+
+
+    return (
+        f"apex_audio.{extension}"
+    )
+
+
+# ============================================================
+# VOICE PROVIDER FALLBACK
+# ============================================================
+
+def _get_voice_providers():
+
+    return [
+        (
+            "OpenRouter",
+            _transcribe_with_openrouter
+        ),
+        (
+            "Groq Whisper",
+            _transcribe_with_groq
+        ),
+        (
+            "Gemini Audio",
+            _transcribe_with_gemini
+        ),
+    ]
 
 
 def transcribe_audio(
@@ -405,102 +1341,92 @@ def transcribe_audio(
     mime_type: str = "audio/webm"
 ) -> str:
     """
-    Transcribes audio using Gemini first.
-    If Gemini quota is exhausted, falls back to Groq Whisper.
+    Main APEX speech-to-text entry point.
+
+    Priority:
+
+        1. OpenRouter
+        2. Groq Whisper
+        3. Gemini Audio
+
+    IMPORTANT:
+    Any provider error causes fallback to the
+    next provider.
     """
 
-    if not audio_bytes or len(audio_bytes) == 0:
-        raise ValueError("Audio data is empty.")
+    if (
+        not audio_bytes
+        or len(audio_bytes) == 0
+    ):
+
+        raise ValueError(
+            "Audio data is empty."
+        )
+
 
     clean_mime_type = (
-        mime_type.split(";")[0].strip()
+        mime_type
+        .split(";")[0]
+        .strip()
         if mime_type
         else "audio/webm"
     )
 
-    # -------------------------------------------------
-    # 1. Try Gemini first
-    # -------------------------------------------------
 
-    try:
+    errors = []
 
-        api_key, model_name = (
-            _get_validated_api_key_and_model()
-        )
 
-        client = genai.Client(
-            api_key=api_key
-        )
+    for (
+        provider_name,
+        provider_function
+    ) in _get_voice_providers():
 
-        audio_part = types.Part.from_bytes(
-            data=audio_bytes,
-            mime_type=clean_mime_type
-        )
-
-        prompt = (
-            "Transcribe the spoken audio in this recording "
-            "accurately into plain text. "
-            "Output ONLY the raw transcription text "
-            "without commentary, intro, or quotation marks. "
-            "If no speech is detected, respond with "
-            "'[No speech detected]'."
-        )
-
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[
-                audio_part,
-                prompt
-            ]
-        )
-
-        if not response.text:
-            raise RuntimeError(
-                "Gemini audio transcription returned "
-                "an empty result."
-            )
-
-        print("[APEX] Voice transcription provider: Gemini")
-
-        return response.text.strip()
-
-    # -------------------------------------------------
-    # 2. Gemini quota → Groq Whisper fallback
-    # -------------------------------------------------
-
-    except Exception as e:
-
-        if _check_quota_error(e):
+        try:
 
             print(
-                "[APEX] Gemini audio quota exhausted."
+                f"[APEX] Trying voice transcription: "
+                f"{provider_name}"
             )
 
-            print(
-                "[APEX] Switching voice transcription "
-                "to Groq Whisper..."
-            )
 
-            try:
-
-                transcription = _transcribe_with_groq(
+            transcription = (
+                provider_function(
                     audio_bytes,
                     clean_mime_type
                 )
+            )
 
-                print(
-                    "[APEX] Voice transcription provider: Groq"
-                )
 
-                return transcription
-
-            except Exception as groq_error:
+            if not transcription:
 
                 raise RuntimeError(
-                    "Gemini audio quota exhausted and "
-                    f"Groq transcription failed: {groq_error}"
+                    "Provider returned empty transcription."
                 )
 
-        raise RuntimeError(
-            f"Audio Transcription Error: {str(e)}"
-        )
+
+            print(
+                f"[APEX] Voice transcription provider: "
+                f"{provider_name}"
+            )
+
+
+            return transcription.strip()
+
+
+        except Exception as error:
+
+            print(
+                f"[APEX] {provider_name} "
+                f"transcription failed: {error}"
+            )
+
+
+            errors.append(
+                f"{provider_name}: {error}"
+            )
+
+
+    raise RuntimeError(
+        "All voice transcription providers failed.\n"
+        + "\n".join(errors)
+    )

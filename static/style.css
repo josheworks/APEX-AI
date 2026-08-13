@@ -327,3 +327,92 @@ body {
     font-family: var(--font-mono);
     letter-spacing: 0.5px;
 }
+
+/* =========================================================
+   APEX CHAT RESPONSE FIX
+   Prevent long AI responses from overflowing the chat box
+   ========================================================= */
+
+.chat-area {
+    overflow-x: hidden;
+}
+
+.chat-area * {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.message,
+.chat-message,
+.ai-message,
+.user-message {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.message-content,
+.chat-message-content,
+.ai-message .message-content,
+.user-message .message-content {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Long URLs */
+.message-content a,
+.chat-message-content a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Tables generated from Markdown */
+.message-content table,
+.chat-message-content table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 12px 0;
+}
+
+.message-content th,
+.message-content td,
+.chat-message-content th,
+.chat-message-content td {
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Code blocks */
+.message-content pre,
+.chat-message-content pre {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* Normal paragraphs/lists */
+.message-content p,
+.message-content li,
+.chat-message-content p,
+.chat-message-content li {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+/* Images */
+.message-content img,
+.chat-message-content img {
+    max-width: 100%;
+    height: auto;
+}
