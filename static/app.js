@@ -101,15 +101,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         conversationVisual.innerHTML = `
-            <div class="conversation-orb">
-                <div class="conversation-orb-inner">
-                    🎙️
+            <div class="terminal-topbar">
+                <div class="terminal-brand">
+                    <span class="terminal-mark">APEX</span>
+                    <div class="terminal-mode">CONVERSATION MODE</div>
+                </div>
+                <div class="terminal-controls">
+                    <button id="conversationEndTop" class="terminal-btn" aria-label="End conversation" title="End conversation">End</button>
                 </div>
             </div>
 
-            <div class="conversation-title">
-                APEX VOICE MODE
-            </div>
+            <div class="conversation-log" id="conversationLog" role="log" aria-live="polite" aria-atomic="false"></div>
 
             <div
                 class="conversation-state"
@@ -118,8 +120,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 READY
             </div>
 
-            <div class="conversation-hint">
-                Say "OK APEX" to stop
+            <div class="conversation-prompt">
+                <button id="conversationMicControl" class="terminal-mic" aria-label="Start listening" title="Start listening">🎙</button>
+                <div class="prompt-hint">Type or speak a command. Say "OK APEX" to stop.</div>
             </div>
         `;
 
@@ -145,167 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'apex-conversation-visual-style';
 
 
+        // Minimal inline styles only; main visual styling is in static/style.css
         style.textContent = `
-
-            #conversationVisual {
-                position: relative;
-            }
-
-            #conversationVisual::before {
-                content: "";
-                position: absolute;
-                width: 300px;
-                height: 300px;
-                border-radius: 50%;
-                background: radial-gradient(
-                    circle,
-                    rgba(0, 242, 254, 0.10),
-                    transparent 70%
-                );
-                pointer-events: none;
-            }
-
-            .conversation-orb {
-                width: 170px;
-                height: 170px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border: 2px solid rgba(0, 242, 254, 0.7);
-                box-shadow:
-                    0 0 25px rgba(0, 242, 254, 0.25),
-                    inset 0 0 30px rgba(0, 242, 254, 0.08);
-                transition:
-                    transform 0.3s ease,
-                    box-shadow 0.3s ease,
-                    border-color 0.3s ease;
-                animation: apexVoiceIdle 3s ease-in-out infinite;
-                z-index: 1;
-            }
-
-            .conversation-orb-inner {
-                width: 130px;
-                height: 130px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 4rem;
-                background:
-                    radial-gradient(
-                        circle,
-                        rgba(30, 41, 59, 0.95),
-                        rgba(15, 23, 42, 0.95)
-                    );
-            }
-
-            .conversation-title {
-                margin-top: 28px;
-                font-family: var(--font-mono);
-                font-size: 0.85rem;
-                letter-spacing: 2px;
-                color: var(--text-secondary);
-                z-index: 1;
-            }
-
-            .conversation-state {
-                margin-top: 10px;
-                font-family: var(--font-mono);
-                font-size: 1rem;
-                font-weight: 700;
-                letter-spacing: 1.5px;
-                color: var(--accent-cyan);
-                z-index: 1;
-            }
-
-            .conversation-hint {
-                margin-top: 18px;
-                font-size: 0.78rem;
-                color: var(--text-secondary);
-                opacity: 0.8;
-                z-index: 1;
-            }
-
-            #conversationVisual.visual-listening
-            .conversation-orb {
-                border-color: var(--status-listening);
-                box-shadow:
-                    0 0 35px rgba(255, 0, 85, 0.55),
-                    inset 0 0 35px rgba(255, 0, 85, 0.10);
-                animation: apexVoiceListening 1s ease-in-out infinite;
-            }
-
-            #conversationVisual.visual-thinking
-            .conversation-orb {
-                border-color: var(--status-thinking);
-                box-shadow:
-                    0 0 35px rgba(168, 85, 247, 0.55),
-                    inset 0 0 35px rgba(168, 85, 247, 0.10);
-                animation: apexVoiceThinking 0.8s linear infinite;
-            }
-
-            #conversationVisual.visual-speaking
-            .conversation-orb {
-                border-color: var(--status-speaking);
-                box-shadow:
-                    0 0 40px rgba(16, 185, 129, 0.55),
-                    inset 0 0 40px rgba(16, 185, 129, 0.10);
-                animation: apexVoiceSpeaking 0.55s ease-in-out infinite;
-            }
-
-            @keyframes apexVoiceIdle {
-                0%, 100% {
-                    transform: scale(1);
-                }
-
-                50% {
-                    transform: scale(1.04);
-                }
-            }
-
-            @keyframes apexVoiceListening {
-                0%, 100% {
-                    transform: scale(1);
-                }
-
-                50% {
-                    transform: scale(1.12);
-                }
-            }
-
-            @keyframes apexVoiceThinking {
-                0% {
-                    transform: rotate(0deg) scale(1);
-                }
-
-                50% {
-                    transform: rotate(180deg) scale(1.08);
-                }
-
-                100% {
-                    transform: rotate(360deg) scale(1);
-                }
-            }
-
-            @keyframes apexVoiceSpeaking {
-                0%, 100% {
-                    transform: scale(1);
-                }
-
-                25% {
-                    transform: scale(1.08);
-                }
-
-                50% {
-                    transform: scale(1.16);
-                }
-
-                75% {
-                    transform: scale(1.08);
-                }
-            }
-
+            /* Placeholder: conversation visual styles are provided in static/style.css (terminal mode) */
         `;
 
 
@@ -315,6 +160,32 @@ document.addEventListener('DOMContentLoaded', () => {
             conversationVisual,
             chatArea.nextSibling
         );
+
+        // Wire up internal controls to use existing canonical functions.
+        const endTop = conversationVisual.querySelector('#conversationEndTop');
+        if (endTop) {
+            endTop.addEventListener('click', () => stopConversationMode());
+        }
+
+        const micControl = conversationVisual.querySelector('#conversationMicControl');
+        if (micControl) {
+            micControl.addEventListener('click', () => {
+                if (currentState === 'SPEAKING') {
+                    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                    startRecording();
+                    return;
+                }
+
+                if (currentState === 'LISTENING') {
+                    stopRecording();
+                    return;
+                }
+
+                if (currentState === 'READY') {
+                    startRecording();
+                }
+            });
+        }
     }
 
 
@@ -1151,6 +1022,28 @@ document.addEventListener('DOMContentLoaded', () => {
             msgBubble
         );
 
+        // Also append to the terminal-style conversation log when active.
+        const convLog = document.getElementById('conversationLog');
+        if (convLog) {
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            const who = document.createElement('span');
+            who.className = 'who';
+            who.textContent = sender + ':';
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'msg';
+            msgSpan.textContent = text;
+            entry.appendChild(who);
+            entry.appendChild(document.createTextNode(' '));
+            entry.appendChild(msgSpan);
+            convLog.appendChild(entry);
+            // Keep the log bounded to the most recent 200 entries to avoid unbounded DOM growth.
+            while (convLog.children.length > 200) {
+                convLog.removeChild(convLog.firstChild);
+            }
+            convLog.scrollTop = convLog.scrollHeight;
+        }
+
 
         chatArea.scrollTop =
             chatArea.scrollHeight;
@@ -1188,11 +1081,14 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
-        indicator.innerHTML =
-            `<span class="tool-icon">⚡</span>` +
-            `<span class="tool-label">` +
-            `APEX › ${label}...` +
-            `</span>`;
+        const icon = document.createElement('span');
+        icon.className = 'tool-icon';
+        icon.textContent = '⚡';
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'tool-label';
+        labelSpan.textContent = `APEX › ${label}...`;
+        indicator.appendChild(icon);
+        indicator.appendChild(labelSpan);
 
 
         indicator.id =
