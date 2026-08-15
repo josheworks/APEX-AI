@@ -34,9 +34,9 @@
 
         <!-- DASHBOARD GRID -->
         <div class="dashboard-grid">
-            <!-- 2. SYSTEM STATUS PANEL -->
-            <section class="panel panel-system" aria-label="System status">
-                <div class="panel-title"><span class="panel-corner">┌─</span> SYSTEM STATUS <span class="panel-line">──────────────────</span><span class="panel-corner">┐</span></div>
+            <!-- 2. SYSTEM STATUS PANEL (collapsible on mobile) -->
+            <details class="panel panel-system panel-collapsible" aria-label="System status">
+                <summary class="panel-title"><span class="panel-corner">┌─</span> SYSTEM STATUS <span class="panel-line">──────────────────</span><span class="panel-corner">┐</span> <span class="collapse-indicator">▸</span></summary>
                 <div class="panel-body">
                     <div class="status-row" data-subsystem="core">
                         <span class="status-label">CORE</span>
@@ -65,16 +65,16 @@
                     </div>
                 </div>
                 <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">──────────────────────────────────</span><span class="panel-corner">┘</span></div>
-            </section>
+            </details>
 
-            <!-- 3. LIVE ACTIVITY PANEL -->
-            <section class="panel panel-activity" aria-label="Live activity">
-                <div class="panel-title"><span class="panel-corner">┌─</span> LIVE ACTIVITY <span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┐</span></div>
+            <!-- 3. LIVE ACTIVITY PANEL (collapsible on mobile) -->
+            <details class="panel panel-activity panel-collapsible" aria-label="Live activity">
+                <summary class="panel-title"><span class="panel-corner">┌─</span> LIVE ACTIVITY <span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┐</span> <span class="collapse-indicator">▸</span></summary>
                 <div class="panel-body panel-scroll">
                     <div class="activity-log" id="activityLog" role="log" aria-live="polite" aria-atomic="false"></div>
                 </div>
                 <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────────────</span><span class="panel-corner">┘</span></div>
-            </section>
+            </details>
 
             <!-- 4. CONVERSATION PANEL -->
             <section class="panel panel-conversation" aria-label="Conversation">
@@ -91,14 +91,14 @@
                 <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────────────────────</span><span class="panel-corner">┘</span></div>
             </section>
 
-            <!-- 5. TOOLS PANEL -->
-            <section class="panel panel-tools" aria-label="Tools">
-                <div class="panel-title"><span class="panel-corner">┌─</span> TOOLS <span class="panel-line">─────────────────────────────</span><span class="panel-corner">┐</span></div>
+            <!-- 5. TOOLS PANEL (collapsible on mobile) -->
+            <details class="panel panel-tools panel-collapsible" aria-label="Tools">
+                <summary class="panel-title"><span class="panel-corner">┌─</span> TOOLS <span class="panel-line">─────────────────────────────</span><span class="panel-corner">┐</span> <span class="collapse-indicator">▸</span></summary>
                 <div class="panel-body panel-scroll">
                     <ul class="tools-list" id="toolsList" aria-label="Available tools"></ul>
                 </div>
                 <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┘</span></div>
-            </section>
+            </details>
 
             <!-- 6. APEX STATUS PANEL -->
             <section class="panel panel-apex-status" aria-label="APEX status">

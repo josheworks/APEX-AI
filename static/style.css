@@ -1,20 +1,22 @@
 :root {
-    --bg-color: #0b0d14;
-    --card-bg: rgba(22, 27, 38, 0.7);
-    --border-color: rgba(255, 255, 255, 0.08);
-    --text-primary: #f0f4f8;
-    --text-secondary: #94a3b8;
+    --bg-deep: #05080c;
+    --bg-main: #080b10;
+    --panel-bg: #080d13;
+    --border-color: rgba(148, 163, 184, 0.18);
+    --text-primary: #d7e1ea;
+    --text-secondary: #64748b;
     --accent-cyan: #00f2fe;
     --accent-blue: #4facfe;
-    --accent-purple: #7f00ff;
+    --accent-success: #10b981;
+    --accent-processing: #a855f7;
+    --accent-warning: #fb7185;
+    --accent-tool: #a855f7;
+    --accent-error: #f472b6;
     --status-ready: #00f2fe;
-    --status-listening: #ff0055;
+    --status-listening: #fb7185;
     --status-thinking: #a855f7;
     --status-speaking: #10b981;
-    --user-msg-bg: linear-gradient(135deg, #1e293b, #334155);
-    --apex-msg-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));
-    --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-mono: 'Space Mono', monospace;
+    --font-mono: 'Space Mono', 'Courier New', monospace;
 }
 
 * {
@@ -23,396 +25,955 @@
     padding: 0;
 }
 
+html,
 body {
-    background-color: var(--bg-color);
-    background-image: 
-        radial-gradient(circle at 15% 15%, rgba(0, 242, 254, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 85% 85%, rgba(127, 0, 255, 0.05) 0%, transparent 40%);
+    height: 100%;
+    overflow-x: hidden;
+}
+
+body {
+    background: var(--bg-deep);
     color: var(--text-primary);
-    font-family: var(--font-main);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.45;
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center;
-    padding: 20px;
+    align-items: stretch;
+    padding: 12px;
 }
+
+/* =========================================================
+   TERMINAL FRAME
+   ========================================================= */
 
 .app-container {
     width: 100%;
-    max-width: 900px;
-    height: 90vh;
-    background: var(--card-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    max-width: 1280px;
+    min-height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+    background: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 24px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     overflow: hidden;
 }
 
-/* Header */
-.header {
-    padding: 20px 28px;
-    background: rgba(11, 13, 20, 0.6);
-    border-bottom: 1px solid var(--border-color);
+.terminal-frame {
+    box-shadow: 0 0 0 1px rgba(0, 242, 254, 0.04);
+}
+
+/* =========================================================
+   1. TOP TERMINAL HEADER
+   ========================================================= */
+
+.terminal-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.logo {
-    font-family: var(--font-mono);
-    font-weight: 700;
-    font-size: 1.5rem;
-    letter-spacing: 2px;
-    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.brand-text h1 {
-    font-size: 1.1rem;
-    font-weight: 600;
+    gap: 12px;
+    padding: 8px 14px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+    font-size: 0.72rem;
     letter-spacing: 0.5px;
 }
 
-.version {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.status-container {
+.header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 8px 16px;
-    border-radius: 20px;
-    border: 1px solid var(--border-color);
+    gap: 8px;
+    min-width: 0;
+}
+
+.header-prompt {
+    color: var(--accent-cyan);
+    font-weight: 700;
+}
+
+.header-title {
+    font-weight: 700;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.header-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-meta {
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 .status-dot {
-    width: 10px;
-    height: 10px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background-color: var(--status-ready);
-    box-shadow: 0 0 10px var(--status-ready);
-    transition: all 0.3s ease;
+    flex-shrink: 0;
 }
 
 .status-text {
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     color: var(--text-primary);
 }
 
-/* Status States */
-.status-ready .status-dot { background-color: var(--status-ready); box-shadow: 0 0 12px var(--status-ready); }
-.status-listening .status-dot { background-color: var(--status-listening); box-shadow: 0 0 12px var(--status-listening); animation: blink 0.8s infinite alternate; }
-.status-thinking .status-dot { background-color: var(--status-thinking); box-shadow: 0 0 12px var(--status-thinking); animation: pulse 1s infinite alternate; }
-.status-speaking .status-dot { background-color: var(--status-speaking); box-shadow: 0 0 12px var(--status-speaking); animation: pulse 0.6s infinite alternate; }
+.status-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-online .status-dot { background-color: var(--status-ready); }
 
 @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
-@keyframes pulse { from { transform: scale(1); } to { transform: scale(1.3); } }
+@keyframes pulse-dot { from { opacity: 0.6; } to { opacity: 1; } }
 
-/* Chat Area */
-.chat-area {
+/* =========================================================
+   DASHBOARD GRID
+   ========================================================= */
+
+.dashboard-grid {
     flex: 1;
-    overflow-y: auto;
-    padding: 24px;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: minmax(120px, 0.9fr) minmax(180px, 1.4fr) minmax(140px, 1fr);
+    grid-template-areas:
+        "system  activity"
+        "conv    conv"
+        "tools   apex";
+    gap: 0;
+    overflow: hidden;
+}
+
+.panel-system { grid-area: system; }
+.panel-activity { grid-area: activity; }
+.panel-conversation { grid-area: conv; }
+.panel-tools { grid-area: tools; }
+.panel-apex-status { grid-area: apex; }
+
+.panel {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    scroll-behavior: smooth;
+    min-height: 0;
+    min-width: 0;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    margin: -0.5px;
+}
+
+.panel-title {
+    padding: 6px 10px 4px;
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.panel-corner {
+    color: var(--border-color);
+}
+
+.panel-line {
+    color: rgba(148, 163, 184, 0.12);
+    letter-spacing: 0;
+}
+
+.panel-body {
+    flex: 1;
+    min-height: 0;
+    padding: 8px 10px;
+}
+
+.panel-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.panel-footer {
+    padding: 2px 10px 4px;
+    color: rgba(148, 163, 184, 0.12);
+    font-size: 0.62rem;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+/* =========================================================
+   2. SYSTEM STATUS
+   ========================================================= */
+
+.status-row {
+    display: grid;
+    grid-template-columns: 52px 1fr 72px;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+}
+
+.status-label {
+    color: var(--text-secondary);
+    font-size: 0.68rem;
+    letter-spacing: 0.5px;
+}
+
+.status-bar {
+    height: 8px;
+    background: rgba(148, 163, 184, 0.08);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    overflow: hidden;
+}
+
+.status-fill {
+    display: block;
+    height: 100%;
+    background: var(--accent-cyan);
+}
+
+.fill-full { width: 100%; }
+.fill-ready { width: 80%; background: var(--accent-blue); }
+.fill-na { width: 0%; background: var(--text-secondary); }
+.fill-active { width: 100%; background: var(--accent-warning); }
+.fill-processing { width: 100%; background: var(--accent-processing); }
+.fill-speaking { width: 100%; background: var(--accent-success); }
+
+.status-value {
+    text-align: right;
+    font-size: 0.66rem;
+    letter-spacing: 0.4px;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+/* =========================================================
+   3. LIVE ACTIVITY
+   ========================================================= */
+
+.activity-log {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.72rem;
+}
+
+.activity-entry {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.activity-time {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.activity-source {
+    flex-shrink: 0;
+    min-width: 52px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.activity-source-system { color: var(--text-secondary); }
+.activity-source-user { color: var(--accent-blue); }
+.activity-source-apex { color: var(--accent-cyan); }
+.activity-source-tool { color: var(--accent-tool); }
+.activity-source-success { color: var(--accent-success); }
+.activity-source-error { color: var(--accent-error); }
+
+.activity-msg {
+    color: var(--text-primary);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* =========================================================
+   4. CONVERSATION
+   ========================================================= */
+
+.chat-area {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
 }
 
 .welcome-card {
-    margin: auto;
-    text-align: center;
-    padding: 40px;
-    max-width: 400px;
+    padding: 4px 0;
     color: var(--text-secondary);
 }
 
-.ai-avatar {
-    font-size: 3rem;
-    margin-bottom: 12px;
+.welcome-line {
+    margin-bottom: 6px;
+    font-size: 0.7rem;
 }
 
-.welcome-card h2 {
-    color: var(--text-primary);
-    margin-bottom: 8px;
+.welcome-time {
+    color: var(--text-secondary);
 }
 
-/* Chat Messages */
+.welcome-tag {
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
+.welcome-prompt {
+    color: var(--accent-cyan);
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.welcome-prompt.muted {
+    color: var(--text-secondary);
+}
+
 .message-bubble {
-    max-width: 80%;
-    padding: 14px 20px;
-    border-radius: 18px;
-    line-height: 1.5;
-    font-size: 0.95rem;
-    animation: fadeIn 0.3s ease-out;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
-.user-message {
-    align-self: flex-end;
-    background: var(--user-msg-bg);
-    border-bottom-right-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
+.user-message,
 .apex-message {
-    align-self: flex-start;
-    background: var(--apex-msg-bg);
-    border-bottom-left-radius: 4px;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    align-self: stretch;
 }
 
 .message-header {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    margin-bottom: 6px;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+    color: var(--text-secondary);
 }
 
-.user-message .message-header { color: var(--accent-cyan); }
-.apex-message .message-header { color: var(--accent-purple); }
+.user-message .message-header { color: var(--accent-blue); }
+.apex-message .message-header { color: var(--accent-cyan); }
 
-/* Controls Footer */
-.controls-footer {
-    padding: 20px 24px;
-    background: rgba(11, 13, 20, 0.8);
-    border-top: 1px solid var(--border-color);
+.message-body {
+    padding-left: 0;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.message-body::before {
+    content: '> ';
+    color: var(--accent-cyan);
+}
+
+.user-message .message-body::before {
+    color: var(--accent-blue);
+}
+
+.tool-indicator {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: 0;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    color: var(--accent-tool);
+}
+
+.tool-icon { display: none; }
+
+.tool-label {
+    letter-spacing: 0.3px;
+}
+
+.tool-label::before {
+    content: '[>] ';
+    color: var(--accent-tool);
+}
+
+/* =========================================================
+   5. TOOLS PANEL
+   ========================================================= */
+
+.tools-list {
+    list-style: none;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 16px;
+    gap: 3px;
 }
 
-.voice-control {
+.tool-item {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.2px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.tool-item-active {
+    color: var(--accent-tool);
+}
+
+.tool-item-done {
+    color: var(--accent-success);
+}
+
+.tool-item-active::before { content: '[>] '; color: var(--accent-tool); }
+.tool-item-done::before { content: '[✓] '; color: var(--accent-success); }
+.tool-item-idle::before { content: '[ ] '; color: var(--text-secondary); }
+
+/* =========================================================
+   6. APEX STATUS PANEL
+   ========================================================= */
+
+.apex-status-main {
     display: flex;
-    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
 }
 
-.mic-btn {
-    position: relative;
-    width: 64px;
-    height: 64px;
+.apex-status-dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #1e293b, #0f172a);
-    border: 2px solid var(--accent-cyan);
-    color: var(--text-primary);
-    font-size: 1.6rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
+    background: var(--status-ready);
+    flex-shrink: 0;
 }
 
-.mic-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 25px rgba(0, 242, 254, 0.4);
+.apex-status-label {
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 1px;
+    color: var(--accent-cyan);
 }
 
-.mic-btn.listening {
-    border-color: var(--status-listening);
-    box-shadow: 0 0 30px rgba(255, 0, 85, 0.6);
-    animation: micPulse 1.2s infinite;
+.apex-status-detail {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    line-height: 1.5;
 }
 
-@keyframes micPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
+.apex-ready .apex-status-dot { background: var(--status-ready); }
+.apex-ready .apex-status-label { color: var(--status-ready); }
+
+.apex-listening .apex-status-dot { background: var(--status-listening); animation: blink 0.8s infinite alternate; }
+.apex-listening .apex-status-label { color: var(--status-listening); }
+
+.apex-thinking .apex-status-dot { background: var(--status-thinking); animation: pulse-dot 1s infinite alternate; }
+.apex-thinking .apex-status-label { color: var(--status-thinking); }
+
+.apex-speaking .apex-status-dot { background: var(--status-speaking); animation: pulse-dot 0.6s infinite alternate; }
+.apex-speaking .apex-status-label { color: var(--status-speaking); }
+
+/* =========================================================
+   7. COMMAND INPUT BAR
+   ========================================================= */
+
+.command-bar {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    background: var(--panel-bg);
+    border-top: 1px solid var(--border-color);
 }
 
 .input-form {
-    width: 100%;
     display: flex;
-    gap: 12px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+.prompt-label {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    flex-shrink: 0;
+    font-size: 0.78rem;
+}
+
+.prompt-input-wrap {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    position: relative;
+    border: 1px solid var(--border-color);
+    background: var(--bg-deep);
+    padding: 6px 8px;
+}
+
+.prompt-input-wrap:focus-within {
+    border-color: rgba(0, 242, 254, 0.35);
 }
 
 .input-form input {
     flex: 1;
-    background: rgba(15, 23, 42, 0.8);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 14px 20px;
+    min-width: 0;
+    background: transparent;
+    border: none;
     color: var(--text-primary);
-    font-family: var(--font-main);
-    font-size: 0.95rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
     outline: none;
-    transition: border-color 0.3s ease;
 }
 
-.input-form input:focus {
-    border-color: var(--accent-cyan);
+.prompt-cursor {
+    color: var(--accent-cyan);
+    animation: cursor-blink 1s step-end infinite;
+    margin-left: 1px;
 }
+
+@keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.command-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.cmd-btn {
+    background: var(--bg-deep);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 6px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.cmd-btn:hover {
+    border-color: rgba(0, 242, 254, 0.35);
+    color: var(--accent-cyan);
+}
+
+.cmd-btn:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+}
+
+.mic-btn {
+    min-width: 88px;
+}
+
+.mic-btn.listening {
+    border-color: rgba(251, 113, 133, 0.5);
+    color: var(--status-listening);
+}
+
+.mic-btn.speaking {
+    border-color: rgba(16, 185, 129, 0.5);
+    color: var(--status-speaking);
+}
+
+.pulse-ring { display: none; }
+.mic-icon { display: none; }
 
 .send-btn {
-    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-    color: #0b0d14;
-    font-weight: 700;
-    font-family: var(--font-main);
-    border: none;
-    border-radius: 12px;
-    padding: 0 24px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: opacity 0.3s ease, transform 0.2s ease;
+    color: var(--accent-cyan);
 }
 
-.send-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-}
-
-/* Notification Banner */
-.notification-banner {
-    background: rgba(239, 68, 68, 0.2);
-    border: 1px solid rgba(239, 68, 68, 0.5);
-    color: #fca5a5;
-    padding: 10px 16px;
-    margin: 0 24px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    text-align: center;
-}
-
-.hidden {
-    display: none;
-}
-
-/* Tool Activity Indicator */
-.tool-indicator {
-    align-self: flex-start;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(127, 0, 255, 0.1);
-    border: 1px solid rgba(127, 0, 255, 0.25);
-    border-radius: 20px;
-    padding: 6px 14px;
-    font-size: 0.78rem;
-    color: #a78bfa;
-    animation: fadeIn 0.3s ease-out;
-}
-
-.tool-icon {
-    font-size: 0.9rem;
-}
-
-.tool-label {
-    font-family: var(--font-mono);
-    letter-spacing: 0.5px;
+.conv-btn.conversation-active {
+    border-color: rgba(251, 113, 133, 0.4);
+    color: var(--accent-warning);
 }
 
 /* =========================================================
-   APEX CHAT RESPONSE FIX
-   Prevent long AI responses from overflowing the chat box
+   8. SYSTEM FOOTER
    ========================================================= */
 
-.chat-area {
-    overflow-x: hidden;
+.system-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 14px 6px;
+    background: var(--bg-deep);
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+    color: var(--text-secondary);
+    font-size: 0.62rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
+/* =========================================================
+   NOTIFICATION
+   ========================================================= */
+
+.notification-banner {
+    background: rgba(244, 114, 182, 0.1);
+    border: 1px solid rgba(244, 114, 182, 0.3);
+    color: #fda4af;
+    padding: 6px 12px;
+    margin: 0 10px;
+    font-size: 0.72rem;
+    flex-shrink: 0;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* =========================================================
+   CONVERSATION MODE — same terminal, emphasized panels
+   ========================================================= */
+
+.app-container.conversation-mode .panel-activity,
+.app-container.conversation-mode .panel-conversation,
+.app-container.conversation-mode .panel-apex-status {
+    border-color: rgba(0, 242, 254, 0.22);
+}
+
+#conversationVisual {
+    display: none !important;
+}
+
+/* =========================================================
+   OVERFLOW / CONTENT SAFETY
+   ========================================================= */
+
+.chat-area,
 .chat-area * {
     max-width: 100%;
     box-sizing: border-box;
 }
 
-.message,
-.chat-message,
-.ai-message,
-.user-message {
-    max-width: 100%;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
 .message-content,
-.chat-message-content,
-.ai-message .message-content,
-.user-message .message-content {
+.message-body {
     max-width: 100%;
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
 
-/* Long URLs */
-.message-content a,
-.chat-message-content a {
+.message-content a {
     overflow-wrap: anywhere;
     word-break: break-word;
 }
 
-/* Tables generated from Markdown */
-.message-content table,
-.chat-message-content table {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-    border-collapse: collapse;
-    margin: 12px 0;
-}
-
-.message-content th,
-.message-content td,
-.chat-message-content th,
-.chat-message-content td {
-    padding: 8px;
-    text-align: left;
-    vertical-align: top;
-    border: 1px solid rgba(128, 128, 128, 0.3);
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-/* Code blocks */
-.message-content pre,
-.chat-message-content pre {
+.message-content pre {
     max-width: 100%;
     overflow-x: auto;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
 
-/* Normal paragraphs/lists */
-.message-content p,
-.message-content li,
-.chat-message-content p,
-.chat-message-content li {
+.message-content table {
+    display: block;
+    width: 100%;
     max-width: 100%;
-    overflow-wrap: anywhere;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin: 8px 0;
 }
 
-/* Images */
-.message-content img,
-.chat-message-content img {
+.message-content th,
+.message-content td {
+    padding: 6px;
+    text-align: left;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.message-content img {
     max-width: 100%;
     height: auto;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 900px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+        grid-template-areas:
+            "system  system"
+            "apex    apex"
+            "conv    conv"
+            "activity activity"
+            "tools   tools";
+    }
+
+    body {
+        padding: 8px;
+    }
+
+    .app-container {
+        max-height: none;
+        min-height: calc(100vh - 16px);
+    }
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 4px;
+        font-size: 0.72rem;
+    }
+
+    .terminal-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .header-right {
+        gap: 8px;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "system"
+            "apex"
+            "conv"
+            "activity"
+            "tools";
+    }
+
+    .command-actions {
+        flex-wrap: wrap;
+    }
+
+    .input-form {
+        flex-wrap: wrap;
+    }
+
+    .prompt-input-wrap {
+        width: 100%;
+        order: 2;
+    }
+
+    .command-actions {
+        width: 100%;
+        order: 3;
+        justify-content: flex-end;
+    }
+
+    .panel-title .panel-line {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+    }
+}
+
+/* =========================================================
+   Mobile-first conversation-priority layout tweaks
+   ========================================================= */
+
+/* Portrait mobile: conversation-first layout */
+@media (max-width: 599px) {
+
+    .app-container {
+        height: 100vh;
+        max-width: 100%;
+        border-radius: 12px;
+        padding: 8px;
+    }
+
+    .dashboard-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        height: calc(100vh - 160px); /* reserve header + input area */
+        overflow: hidden;
+    }
+
+    /* Keep header at top */
+    .terminal-header {
+        flex: 0 0 auto;
+        padding: 12px 12px;
+    }
+
+    /* Conversation becomes primary */
+    .panel-conversation {
+        order: 1;
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .panel-conversation .panel-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 8px;
+    }
+
+    /* APEX status after conversation */
+    .panel-apex-status {
+        order: 2;
+        flex: 0 0 auto;
+        margin-top: 4px;
+    }
+
+    /* Collapse secondary panels into summaries */
+    .panel-collapsible {
+        order: 3;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+        background: rgba(2,6,10,0.35);
+    }
+
+    .panel-collapsible summary.panel-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        cursor: pointer;
+        list-style: none;
+        color: var(--text-primary);
+        font-family: var(--font-mono);
+        font-weight: 700;
+        border: 1px solid rgba(255,255,255,0.03);
+        background: rgba(0,0,0,0.35);
+    }
+
+    /* Hide panel bodies by default; allow open state */
+    .panel-collapsible .panel-body,
+    .panel-collapsible .panel-footer {
+        display: none;
+    }
+
+    .panel-collapsible[open] .panel-body,
+    .panel-collapsible[open] .panel-footer {
+        display: block;
+        padding: 8px 12px;
+    }
+
+    .panel-collapsible summary .collapse-indicator {
+        transition: transform 0.18s ease;
+        opacity: 0.9;
+    }
+
+    .panel-collapsible[open] summary .collapse-indicator {
+        transform: rotate(90deg);
+    }
+
+    /* Ensure command bar stays accessible at bottom */
+    .command-bar {
+        position: sticky;
+        bottom: 0;
+        background: rgba(11,13,20,0.9);
+        padding: 8px 10px;
+        z-index: 40;
+    }
+
+    /* Add bottom padding so conversation scroll area isn't hidden under command bar */
+    .panel-conversation .panel-body {
+        padding-bottom: 88px; /* enough for input controls */
+    }
+
+    /* Compact header metas */
+    .header-right .header-meta { display: none; }
+
+    /* Subtle landscape recommendation */
+    body::after {
+        content: '↻ Landscape recommended for full dashboard';
+        position: fixed;
+        right: 10px;
+        top: 12px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: rgba(255,255,255,0.06);
+        pointer-events: none;
+        z-index: 50;
+    }
+
+}
+
+/* Compact dashboard for small tablets / narrow desktops (600-999px) */
+@media (min-width: 600px) and (max-width: 999px) {
+
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        grid-auto-rows: minmax(120px, auto);
+        gap: 12px;
+        height: calc(100vh - 120px);
+    }
+
+    .panel-conversation {
+        grid-column: 1 / 2;
+        grid-row: 1 / span 2;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .panel-conversation .panel-body { overflow-y: auto; padding: 12px; }
+
+    .panel-apex-status {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+    }
+
+    .panel-system,
+    .panel-tools,
+    .panel-activity {
+        grid-column: 2 / 3;
+        grid-row: auto / auto;
+    }
+
+    .panel-collapsible summary { display: none; }
+    .panel-collapsible .panel-body, .panel-collapsible .panel-footer { display: block; }
+
+    .command-bar { position: relative; }
+}
+
+/* Ensure no horizontal overflow on narrow screens */
+@media (max-width: 999px) {
+    html, body { overflow-x: hidden; }
+    .app-container { max-width: 100vw; padding-left: 8px; padding-right: 8px; }
 }
