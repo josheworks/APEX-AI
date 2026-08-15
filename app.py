@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request, File, UploadFile, status
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import brain
 from brain import QuotaExhaustedException
@@ -11,6 +12,19 @@ app = FastAPI(
     title="APEX v0.1",
     description="Minimal FastAPI backend with AI Brain, Voice Input & Tools for APEX personal AI assistant",
     version="0.1.0"
+)
+
+# Development-friendly CORS: allow Live Server default origin(s)
+# This is intentionally permissive for local dev only.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
 )
 
 # Mount static files directory
