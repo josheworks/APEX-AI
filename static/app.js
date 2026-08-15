@@ -598,8 +598,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             stopRecognition();
 
 
-                            // Stop Conversation Mode.
-                            stopConversationMode();
+                            // Stop Conversation Mode silently (no UI banner).
+                            doStopConversationMode({
+                                suppressNotification: true
+                            });
 
 
                             recognitionBuffer =
@@ -2467,7 +2469,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function stopConversationMode() {
+    function doStopConversationMode(
+        options = {}
+    ) {
+
+        const {
+            suppressNotification = false
+        } = options;
+
 
         conversationMode =
             false;
@@ -2520,10 +2529,23 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
-        showNotification(
-            "Conversation mode ended.",
-            2500
-        );
+        if (!suppressNotification) {
+
+            showNotification(
+                "Conversation mode ended.",
+                2500
+            );
+        }
+
+    }
+
+
+    function stopConversationMode() {
+
+        doStopConversationMode({
+            suppressNotification: false
+        });
+
     }
 
 
