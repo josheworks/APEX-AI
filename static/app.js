@@ -52,6 +52,473 @@ document.addEventListener('DOMContentLoaded', () => {
     const notificationMessage =
         document.getElementById('notificationMessage');
 
+    const appContainer =
+        document.getElementById('appContainer');
+
+    const activityLog =
+        document.getElementById('activityLog');
+
+    const toolsList =
+        document.getElementById('toolsList');
+
+    const apexStatusDot =
+        document.getElementById('apexStatusDot');
+
+    const apexStatusLabel =
+        document.getElementById('apexStatusLabel');
+
+    const apexStatusDetail =
+        document.getElementById('apexStatusDetail');
+
+    const apexStatusPanel =
+        document.querySelector('.panel-apex-status');
+
+    const micLabel =
+        document.getElementById('micLabel');
+
+    const headerVoiceStatus =
+        document.getElementById('headerVoiceStatus');
+
+    const sysVoice =
+        document.getElementById('sysVoice');
+
+    const sysVoiceBar =
+        document.getElementById('sysVoiceBar');
+
+    const systemFooterTime =
+        document.getElementById('systemFooterTime');
+
+    const welcomeTime =
+        document.getElementById('welcomeTime');
+
+
+    // =========================================================
+    // TERMINAL DASHBOARD HELPERS
+    // =========================================================
+
+    function formatTime(
+        date = new Date()
+    ) {
+
+        return date.toLocaleTimeString(
+            'en-US',
+            {
+                hour12: false
+            }
+        );
+    }
+
+
+    function logActivity(
+        source,
+        message,
+        sourceClass = 'system'
+    ) {
+
+        if (
+            !activityLog ||
+            !message
+        ) {
+            return;
+        }
+
+
+        const entry =
+            document.createElement('div');
+
+
+        entry.className =
+            'activity-entry';
+
+
+        const timeSpan =
+            document.createElement('span');
+
+
+        timeSpan.className =
+            'activity-time';
+
+
+        timeSpan.textContent =
+            `[${formatTime()}]`;
+
+
+        const sourceSpan =
+            document.createElement('span');
+
+
+        sourceSpan.className =
+            `activity-source activity-source-${sourceClass}`;
+
+
+        sourceSpan.textContent =
+            source;
+
+
+        const msgSpan =
+            document.createElement('span');
+
+
+        msgSpan.className =
+            'activity-msg';
+
+
+        msgSpan.textContent =
+            message;
+
+
+        entry.appendChild(timeSpan);
+        entry.appendChild(sourceSpan);
+        entry.appendChild(msgSpan);
+
+
+        activityLog.appendChild(
+            entry
+        );
+
+
+        while (
+            activityLog.children.length >
+            200
+        ) {
+
+            activityLog.removeChild(
+                activityLog.firstChild
+            );
+        }
+
+
+        activityLog.scrollTop =
+            activityLog.scrollHeight;
+    }
+
+
+    function initToolsList() {
+
+        if (
+            !toolsList
+        ) {
+            return;
+        }
+
+
+        toolsList.innerHTML =
+            '';
+
+
+        Object.keys(
+            TOOL_LABELS
+        ).forEach(
+            toolName => {
+
+                const item =
+                    document.createElement(
+                        'li'
+                    );
+
+
+                item.className =
+                    'tool-item tool-item-idle';
+
+
+                item.dataset.tool =
+                    toolName;
+
+
+                item.textContent =
+                    toolName;
+
+
+                toolsList.appendChild(
+                    item
+                );
+            }
+        );
+    }
+
+
+    function updateToolStatus(
+        toolName,
+        status
+    ) {
+
+        if (
+            !toolsList ||
+            !toolName
+        ) {
+            return;
+        }
+
+
+        const items =
+            toolsList.querySelectorAll(
+                '.tool-item'
+            );
+
+
+        items.forEach(
+            item => {
+
+                item.classList.remove(
+                    'tool-item-active',
+                    'tool-item-done',
+                    'tool-item-idle'
+                );
+
+
+                if (
+                    item.dataset.tool ===
+                    toolName
+                ) {
+
+                    item.classList.add(
+                        status === 'active'
+                            ? 'tool-item-active'
+                            : status === 'done'
+                                ? 'tool-item-done'
+                                : 'tool-item-idle'
+                    );
+
+                } else {
+
+                    item.classList.add(
+                        'tool-item-idle'
+                    );
+                }
+            }
+        );
+    }
+
+
+    function resetToolStatus() {
+
+        if (
+            !toolsList
+        ) {
+            return;
+        }
+
+
+        toolsList.querySelectorAll(
+            '.tool-item'
+        ).forEach(
+            item => {
+
+                item.classList.remove(
+                    'tool-item-active',
+                    'tool-item-done'
+                );
+
+                item.classList.add(
+                    'tool-item-idle'
+                );
+            }
+        );
+    }
+
+
+    function updateApexStatusPanel(
+        state
+    ) {
+
+        const labels = {
+            READY: 'READY',
+            LISTENING: 'LISTENING',
+            THINKING: 'PROCESSING',
+            SPEAKING: 'SPEAKING'
+        };
+
+
+        const details = {
+            READY: 'Waiting for input...',
+            LISTENING: 'Microphone active...',
+            THINKING: 'APEX is processing...',
+            SPEAKING: 'Voice output active...'
+        };
+
+
+        if (
+            apexStatusLabel
+        ) {
+
+            apexStatusLabel.textContent =
+                labels[state] ||
+                state;
+        }
+
+
+        if (
+            apexStatusDetail
+        ) {
+
+            apexStatusDetail.textContent =
+                details[state] ||
+                '';
+        }
+
+
+        if (
+            apexStatusPanel
+        ) {
+
+            apexStatusPanel.classList.remove(
+                'apex-ready',
+                'apex-listening',
+                'apex-thinking',
+                'apex-speaking'
+            );
+
+
+            apexStatusPanel.classList.add(
+                `apex-${state.toLowerCase()}`
+            );
+        }
+    }
+
+
+    function updateSystemPanels(
+        state
+    ) {
+
+        const voiceLabels = {
+            READY: 'READY',
+            LISTENING: 'LISTENING',
+            THINKING: 'BUSY',
+            SPEAKING: 'SPEAKING'
+        };
+
+
+        if (
+            sysVoice
+        ) {
+
+            sysVoice.textContent =
+                voiceLabels[state] ||
+                state;
+        }
+
+
+        if (
+            sysVoiceBar
+        ) {
+
+            sysVoiceBar.className =
+                'status-fill';
+
+
+            if (
+                state ===
+                'LISTENING'
+            ) {
+
+                sysVoiceBar.classList.add(
+                    'fill-active'
+                );
+
+            } else if (
+                state ===
+                'THINKING'
+            ) {
+
+                sysVoiceBar.classList.add(
+                    'fill-processing'
+                );
+
+            } else if (
+                state ===
+                'SPEAKING'
+            ) {
+
+                sysVoiceBar.classList.add(
+                    'fill-speaking'
+                );
+
+            } else {
+
+                sysVoiceBar.classList.add(
+                    'fill-full'
+                );
+            }
+        }
+
+
+        if (
+            headerVoiceStatus
+        ) {
+
+            headerVoiceStatus.textContent =
+                `VOICE: ${voiceLabels[state] || state}`;
+        }
+    }
+
+
+    function updateMicLabel(
+        state
+    ) {
+
+        if (
+            !micLabel
+        ) {
+            return;
+        }
+
+
+        if (
+            state ===
+            'LISTENING'
+        ) {
+
+            micLabel.textContent =
+                '■ STOP';
+
+            micBtn.classList.add(
+                'listening'
+            );
+
+            micBtn.classList.remove(
+                'speaking'
+            );
+
+        } else if (
+            state ===
+            'SPEAKING'
+        ) {
+
+            micLabel.textContent =
+                '◼ INTERRUPT';
+
+            micBtn.classList.add(
+                'speaking'
+            );
+
+            micBtn.classList.remove(
+                'listening'
+            );
+
+        } else {
+
+            micLabel.textContent =
+                '🎙 LISTEN';
+
+            micBtn.classList.remove(
+                'listening',
+                'speaking'
+            );
+        }
+    }
+
+
+    function updateSystemFooterTime() {
+
+        if (
+            systemFooterTime
+        ) {
+
+            systemFooterTime.textContent =
+                formatTime();
+        }
+    }
+
 
     // =========================================================
     // STATE
@@ -87,105 +554,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createConversationVisual() {
 
-        if (conversationVisual) {
-            return;
-        }
-
-
+        // Terminal dashboard uses the main layout.
+        // Keep this hook for compatibility with existing flow.
         conversationVisual =
-            document.createElement('div');
-
-
-        conversationVisual.id =
-            'conversationVisual';
-
-
-        conversationVisual.innerHTML = `
-            <div class="terminal-topbar">
-                <div class="terminal-brand">
-                    <span class="terminal-mark">APEX</span>
-                    <div class="terminal-mode">CONVERSATION MODE</div>
-                </div>
-                <div class="terminal-controls">
-                    <button id="conversationEndTop" class="terminal-btn" aria-label="End conversation" title="End conversation">End</button>
-                </div>
-            </div>
-
-            <div class="conversation-log" id="conversationLog" role="log" aria-live="polite" aria-atomic="false"></div>
-
-            <div
-                class="conversation-state"
-                id="conversationVisualState"
-            >
-                READY
-            </div>
-
-            <div class="conversation-prompt">
-                <button id="conversationMicControl" class="terminal-mic" aria-label="Start listening" title="Start listening">🎙</button>
-                <div class="prompt-hint">Type or speak a command. Say "OK APEX" to stop.</div>
-            </div>
-        `;
-
-
-        conversationVisual.style.cssText = `
-            flex: 1;
-            min-height: 0;
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 30px;
-            overflow: hidden;
-        `;
-
-
-        const style =
-            document.createElement('style');
-
-
-        style.id =
-            'apex-conversation-visual-style';
-
-
-        // Minimal inline styles only; main visual styling is in static/style.css
-        style.textContent = `
-            /* Placeholder: conversation visual styles are provided in static/style.css (terminal mode) */
-        `;
-
-
-        document.head.appendChild(style);
-
-        chatArea.parentNode.insertBefore(
-            conversationVisual,
-            chatArea.nextSibling
-        );
-
-        // Wire up internal controls to use existing canonical functions.
-        const endTop = conversationVisual.querySelector('#conversationEndTop');
-        if (endTop) {
-            endTop.addEventListener('click', () => stopConversationMode());
-        }
-
-        const micControl = conversationVisual.querySelector('#conversationMicControl');
-        if (micControl) {
-            micControl.addEventListener('click', () => {
-                if (currentState === 'SPEAKING') {
-                    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-                    startRecording();
-                    return;
-                }
-
-                if (currentState === 'LISTENING') {
-                    stopRecording();
-                    return;
-                }
-
-                if (currentState === 'READY') {
-                    startRecording();
-                }
-            });
-        }
+            document.getElementById(
+                'activityLog'
+            );
     }
 
 
@@ -193,48 +567,9 @@ document.addEventListener('DOMContentLoaded', () => {
         state
     ) {
 
-        if (!conversationVisual) {
-            return;
-        }
-
-
-        const visualState =
-            document.getElementById(
-                'conversationVisualState'
-            );
-
-
-        conversationVisual.classList.remove(
-            'visual-listening',
-            'visual-thinking',
-            'visual-speaking'
+        updateApexStatusPanel(
+            state
         );
-
-
-        if (visualState) {
-            visualState.textContent =
-                state;
-        }
-
-
-        if (state === 'LISTENING') {
-
-            conversationVisual.classList.add(
-                'visual-listening'
-            );
-
-        } else if (state === 'THINKING') {
-
-            conversationVisual.classList.add(
-                'visual-thinking'
-            );
-
-        } else if (state === 'SPEAKING') {
-
-            conversationVisual.classList.add(
-                'visual-speaking'
-            );
-        }
     }
 
 
@@ -245,28 +580,33 @@ document.addEventListener('DOMContentLoaded', () => {
         createConversationVisual();
 
 
+        if (
+            appContainer
+        ) {
+
+            appContainer.classList.toggle(
+                'conversation-mode',
+                enabled
+            );
+        }
+
+
         if (enabled) {
 
-            // Hide normal chat layout.
-            chatArea.style.display =
-                'none';
+            logActivity(
+                'SYSTEM',
+                'Conversation mode initialized.',
+                'system'
+            );
 
 
-            // Show voice interface.
-            conversationVisual.style.display =
-                'flex';
-
-
-            updateConversationVisualState(
-                currentState
+            logActivity(
+                'SYSTEM',
+                'Voice channel ready.',
+                'system'
             );
 
         } else {
-
-            // Restore normal chat layout.
-            conversationVisual.style.display =
-                'none';
-
 
             chatArea.style.display =
                 'flex';
@@ -684,6 +1024,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         if (
+            welcomeTime
+        ) {
+
+            welcomeTime.textContent =
+                `[${formatTime()}]`;
+        }
+
+
+        if (
             'speechSynthesis' in window
         ) {
 
@@ -785,6 +1134,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // =========================================================
+    // API base configuration (development proxy-friendly)
+    // =========================================================
+
+    // Resolve API base using (in order):
+    // 1) <meta name="apex-api-base" content="http://127.0.0.1:8000">
+    // 2) If running on Live Server default port 5500, point to local FastAPI on 8000
+    // 3) Otherwise use same-origin (empty string, so fetch('/chat') still works)
+    const APEX_API_BASE = (() => {
+        try {
+            const m = document.querySelector('meta[name="apex-api-base"]');
+            if (m && m.content) {
+                return m.content.replace(/\/$/, '');
+            }
+        } catch (e) {}
+
+        // Detect common Live Server port used during local dev
+        if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+            if (location.port === '5500') {
+                return 'http://127.0.0.1:8000';
+            }
+        }
+
+        return '';
+    })();
+
+    function buildApiUrl(path) {
+        // path must start with '/'
+        if (!path.startsWith('/')) path = '/' + path;
+        return (APEX_API_BASE || '') + path;
+    }
+
+
+    // =========================================================
     // STATE MACHINE
     // =========================================================
 
@@ -799,30 +1181,68 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusText) {
 
             statusText.textContent =
-                newState;
+                'ONLINE';
         }
 
 
         if (statusContainer) {
 
             statusContainer.className =
-                'status-container';
+                'header-status status-container status-online';
+        }
 
 
-            statusContainer.classList.add(
-                `status-${newState.toLowerCase()}`
+        updateApexStatusPanel(
+            newState
+        );
+
+
+        updateSystemPanels(
+            newState
+        );
+
+
+        updateMicLabel(
+            newState
+        );
+
+
+        if (
+            newState ===
+            'LISTENING'
+        ) {
+
+            logActivity(
+                'SYSTEM',
+                'Microphone active.',
+                'system'
+            );
+
+        } else if (
+            newState ===
+            'THINKING'
+        ) {
+
+            logActivity(
+                'APEX',
+                'Processing request...',
+                'apex'
+            );
+
+        } else if (
+            newState ===
+            'SPEAKING'
+        ) {
+
+            logActivity(
+                'SYSTEM',
+                'Voice output active.',
+                'system'
             );
         }
 
 
         if (micBtn) {
-
-            micBtn.classList.toggle(
-                'listening',
-                newState ===
-                    'LISTENING'
-            );
-
 
             if (
                 newState ===
@@ -883,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ) {
 
                 conversationBtn.textContent =
-                    '🛑 End Conversation';
+                    'EXIT';
 
 
                 conversationBtn.classList.add(
@@ -894,10 +1314,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 conversationBtn.title =
                     'Stop conversation mode';
 
+                conversationBtn.setAttribute(
+                    'aria-label',
+                    'Exit conversation mode'
+                );
+
             } else {
 
                 conversationBtn.textContent =
-                    '💬 Conversation';
+                    'CONV';
 
 
                 conversationBtn.classList.remove(
@@ -907,6 +1332,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 conversationBtn.title =
                     'Start conversation mode';
+
+                conversationBtn.setAttribute(
+                    'aria-label',
+                    'Start conversation mode'
+                );
             }
         }
     }
@@ -990,7 +1420,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         msgHeader.textContent =
-            sender;
+            `[${formatTime()}] ${sender === 'USER' ? 'YOU' : sender}`;
 
 
         const msgBody =
@@ -1022,27 +1452,24 @@ document.addEventListener('DOMContentLoaded', () => {
             msgBubble
         );
 
-        // Also append to the terminal-style conversation log when active.
-        const convLog = document.getElementById('conversationLog');
-        if (convLog) {
-            const entry = document.createElement('div');
-            entry.className = 'entry';
-            const who = document.createElement('span');
-            who.className = 'who';
-            who.textContent = sender + ':';
-            const msgSpan = document.createElement('span');
-            msgSpan.className = 'msg';
-            msgSpan.textContent = text;
-            entry.appendChild(who);
-            entry.appendChild(document.createTextNode(' '));
-            entry.appendChild(msgSpan);
-            convLog.appendChild(entry);
-            // Keep the log bounded to the most recent 200 entries to avoid unbounded DOM growth.
-            while (convLog.children.length > 200) {
-                convLog.removeChild(convLog.firstChild);
-            }
-            convLog.scrollTop = convLog.scrollHeight;
-        }
+
+        const activitySource =
+            sender === 'USER'
+                ? 'USER'
+                : 'APEX';
+
+
+        const activityClass =
+            sender === 'USER'
+                ? 'user'
+                : 'apex';
+
+
+        logActivity(
+            activitySource,
+            text,
+            activityClass
+        );
 
 
         chatArea.scrollTop =
@@ -1065,11 +1492,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        const label =
-            TOOL_LABELS[toolName] ||
-            toolName;
-
-
         const indicator =
             document.createElement(
                 'div'
@@ -1086,13 +1508,29 @@ document.addEventListener('DOMContentLoaded', () => {
         icon.textContent = '⚡';
         const labelSpan = document.createElement('span');
         labelSpan.className = 'tool-label';
-        labelSpan.textContent = `APEX › ${label}...`;
+        labelSpan.textContent =
+            toolName;
+
+
         indicator.appendChild(icon);
         indicator.appendChild(labelSpan);
 
 
         indicator.id =
             'tool-indicator-active';
+
+
+        updateToolStatus(
+            toolName,
+            'active'
+        );
+
+
+        logActivity(
+            'TOOL',
+            toolName,
+            'tool'
+        );
 
 
         chatArea.appendChild(
@@ -1114,6 +1552,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         if (element) {
+
+            const toolName =
+                element.querySelector(
+                    '.tool-label'
+                )?.textContent;
+
+
+            if (
+                toolName
+            ) {
+
+                updateToolStatus(
+                    toolName,
+                    'done'
+                );
+
+
+                setTimeout(
+                    resetToolStatus,
+                    2000
+                );
+            }
+
 
             element.remove();
         }
@@ -1155,7 +1616,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const response =
                 await fetch(
-                    '/chat',
+                    buildApiUrl('/chat'),
                     {
                         method: 'POST',
 
@@ -1321,7 +1782,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const response =
                 await fetch(
-                    '/voice',
+                    buildApiUrl('/voice'),
                     {
                         method: 'POST',
                         body: formData
@@ -2626,6 +3087,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     createConversationVisual();
+
+    initToolsList();
+
+    updateApexStatusPanel(
+        'READY'
+    );
+
+    updateSystemPanels(
+        'READY'
+    );
+
+    updateMicLabel(
+        'READY'
+    );
+
+    updateSystemFooterTime();
+
+    setInterval(
+        updateSystemFooterTime,
+        1000
+    );
+
+    logActivity(
+        'SYSTEM',
+        'APEX initialized.',
+        'system'
+    );
 
     setTimeAwareWelcome();
 

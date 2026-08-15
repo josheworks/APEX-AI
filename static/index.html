@@ -7,64 +7,146 @@
     <title>APEX v0.1 — Advanced Personal Executive</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <!-- Optional: override API base for development (set to http://127.0.0.1:8000 when using Live Server on :5500) -->
+    <meta name="apex-api-base" content="http://127.0.0.1:8000">
 </head>
 
 <body>
-    <div class="app-container">
-        <!-- Header -->
-        <header class="header">
-            <div class="brand">
-                <div class="logo">APEX</div>
-                <div class="brand-text">
-                    <h1>Advanced Personal Executive</h1>
-                    <span class="version">v0.1 — Voice AI Assistant</span>
-                </div>
+    <div class="app-container terminal-frame" id="appContainer">
+        <!-- 1. TOP TERMINAL HEADER -->
+        <header class="terminal-header">
+            <div class="header-left">
+                <span class="header-prompt">&gt;</span>
+                <span class="header-title">APEX AI SYSTEM</span>
             </div>
-            <div class="status-container">
-                <span class="status-dot" id="statusDot"></span>
-                <span class="status-text" id="statusText">READY</span>
+            <div class="header-right">
+                <span class="header-status status-container">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span class="status-text" id="statusText">ONLINE</span>
+                </span>
+                <span class="header-meta">MODEL: GEMINI</span>
+                <span class="header-meta" id="headerVoiceStatus">VOICE: READY</span>
+                <span class="header-meta">v0.1</span>
             </div>
         </header>
 
-        <!-- Main Conversation Area -->
-        <main class="chat-area" id="chatArea">
-            <div class="welcome-card" id="welcomeCard">
-                <div class="ai-avatar">🤖</div>
-                <h2 id="welcomeTitle">APEX is online</h2>
-                <p id="welcomeMessage">What can I do for you, Boss?</p>
-            </div>
+        <!-- DASHBOARD GRID -->
+        <div class="dashboard-grid">
+            <!-- 2. SYSTEM STATUS PANEL -->
+            <section class="panel panel-system" aria-label="System status">
+                <div class="panel-title"><span class="panel-corner">┌─</span> SYSTEM STATUS <span class="panel-line">──────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-body">
+                    <div class="status-row" data-subsystem="core">
+                        <span class="status-label">CORE</span>
+                        <span class="status-bar" aria-hidden="true"><span class="status-fill fill-full"></span></span>
+                        <span class="status-value" id="sysCore">ONLINE</span>
+                    </div>
+                    <div class="status-row" data-subsystem="voice">
+                        <span class="status-label">VOICE</span>
+                        <span class="status-bar" aria-hidden="true"><span class="status-fill fill-full" id="sysVoiceBar"></span></span>
+                        <span class="status-value" id="sysVoice">READY</span>
+                    </div>
+                    <div class="status-row" data-subsystem="memory">
+                        <span class="status-label">MEMORY</span>
+                        <span class="status-bar" aria-hidden="true"><span class="status-fill fill-na"></span></span>
+                        <span class="status-value">N/A</span>
+                    </div>
+                    <div class="status-row" data-subsystem="tools">
+                        <span class="status-label">TOOLS</span>
+                        <span class="status-bar" aria-hidden="true"><span class="status-fill fill-ready"></span></span>
+                        <span class="status-value" id="sysTools">READY</span>
+                    </div>
+                    <div class="status-row" data-subsystem="ai">
+                        <span class="status-label">AI</span>
+                        <span class="status-bar" aria-hidden="true"><span class="status-fill fill-full"></span></span>
+                        <span class="status-value" id="sysAi">ONLINE</span>
+                    </div>
+                </div>
+                <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">──────────────────────────────────</span><span class="panel-corner">┘</span></div>
+            </section>
 
-        </main>
+            <!-- 3. LIVE ACTIVITY PANEL -->
+            <section class="panel panel-activity" aria-label="Live activity">
+                <div class="panel-title"><span class="panel-corner">┌─</span> LIVE ACTIVITY <span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-body panel-scroll">
+                    <div class="activity-log" id="activityLog" role="log" aria-live="polite" aria-atomic="false"></div>
+                </div>
+                <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────────────</span><span class="panel-corner">┘</span></div>
+            </section>
+
+            <!-- 4. CONVERSATION PANEL -->
+            <section class="panel panel-conversation" aria-label="Conversation">
+                <div class="panel-title"><span class="panel-corner">┌─</span> CONVERSATION <span class="panel-line">──────────────────────────────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-body panel-scroll">
+                    <main class="chat-area" id="chatArea">
+                        <div class="welcome-card" id="welcomeCard">
+                            <div class="welcome-line"><span class="welcome-time" id="welcomeTime"></span> <span class="welcome-tag">SYSTEM</span></div>
+                            <div class="welcome-prompt">&gt; <span id="welcomeTitle">APEX is online</span></div>
+                            <div class="welcome-prompt muted">&gt; <span id="welcomeMessage">What can I do for you, Boss?</span></div>
+                        </div>
+                    </main>
+                </div>
+                <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────────────────────</span><span class="panel-corner">┘</span></div>
+            </section>
+
+            <!-- 5. TOOLS PANEL -->
+            <section class="panel panel-tools" aria-label="Tools">
+                <div class="panel-title"><span class="panel-corner">┌─</span> TOOLS <span class="panel-line">─────────────────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-body panel-scroll">
+                    <ul class="tools-list" id="toolsList" aria-label="Available tools"></ul>
+                </div>
+                <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┘</span></div>
+            </section>
+
+            <!-- 6. APEX STATUS PANEL -->
+            <section class="panel panel-apex-status" aria-label="APEX status">
+                <div class="panel-title"><span class="panel-corner">┌─</span> APEX STATUS <span class="panel-line">────────────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-body">
+                    <div class="apex-status-main">
+                        <span class="apex-status-dot" id="apexStatusDot"></span>
+                        <span class="apex-status-label" id="apexStatusLabel">READY</span>
+                    </div>
+                    <div class="apex-status-detail" id="apexStatusDetail">Waiting for input...</div>
+                </div>
+                <div class="panel-footer"><span class="panel-corner">└</span><span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┘</span></div>
+            </section>
+        </div>
 
         <!-- Notification Banner -->
         <div class="notification-banner hidden" id="notificationBanner">
             <span id="notificationMessage"></span>
         </div>
 
-        <!-- Controls Section -->
-        <footer class="controls-footer">
-            <div class="voice-control">
-                <button class="mic-btn" id="micBtn" title="Click to start listening">
-                    <div class="pulse-ring"></div>
-                    <span class="mic-icon">🎙️</span>
-                </button>
-                <button class="conversation-btn" id="conversationBtn" type="button" title="Start conversation mode">
-                    💬 Conversation
-                </button>
-            </div>
-
+        <!-- 7. COMMAND INPUT BAR -->
+        <footer class="command-bar">
             <form class="input-form" id="chatForm">
-                <input type="text" id="userInput" placeholder="Type a message or use microphone..." autocomplete="off"
-                    required />
-                <button type="submit" id="sendBtn" class="send-btn">
-                    <span>Send</span>
-                    <span class="send-icon">➤</span>
-                </button>
+                <label class="prompt-label" for="userInput">APEX&gt;</label>
+                <div class="prompt-input-wrap">
+                    <input type="text" id="userInput" placeholder="" autocomplete="off" required aria-label="Command input" />
+                    <span class="prompt-cursor" aria-hidden="true">_</span>
+                </div>
+                <div class="command-actions">
+                    <button type="button" class="cmd-btn mic-btn" id="micBtn" aria-label="Start listening" title="Click to start listening">
+                        <span class="mic-label" id="micLabel">🎙 LISTEN</span>
+                    </button>
+                    <button type="submit" id="sendBtn" class="cmd-btn send-btn" aria-label="Send message" title="Send message">
+                        SEND
+                    </button>
+                    <button type="button" class="cmd-btn conv-btn" id="conversationBtn" aria-label="Start conversation mode" title="Start conversation mode">
+                        CONV
+                    </button>
+                </div>
             </form>
         </footer>
+
+        <!-- 8. FOOTER / SYSTEM INFO -->
+        <div class="system-footer">
+            <span>APEX v0.1</span>
+            <span>Advanced Personal Executive</span>
+            <span id="systemFooterTime"></span>
+        </div>
     </div>
 
     <script src="/static/app.js"></script>
