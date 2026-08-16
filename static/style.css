@@ -482,7 +482,7 @@ body {
 }
 
 .tool-item-active::before { content: '[>] '; color: var(--accent-tool); }
-.tool-item-done::before { content: '[✓] '; color: var(--accent-success); }
+.tool-item-done::before { content: '[+] '; color: var(--accent-success); }
 .tool-item-idle::before { content: '[ ] '; color: var(--text-secondary); }
 
 /* =========================================================

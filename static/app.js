@@ -527,25 +527,58 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function scrollConversationToBottom() {
+    function getConversationScrollContainer() {
         if (!chatArea) {
+            return null;
+        }
+
+        return (
+            chatArea.closest('.panel-scroll') ||
+            chatArea.parentElement
+        );
+    }
+
+
+    function scrollConversationToBottom(instant = false) {
+        const container =
+            getConversationScrollContainer();
+
+        if (!container) {
             return;
         }
 
-        const targetScrollTop = chatArea.scrollHeight;
+        const performScroll = () => {
+            const top =
+                container.scrollHeight;
 
-        if (chatArea.scrollTop === targetScrollTop) {
-            return;
-        }
+            if (instant) {
+                container.scrollTop = top;
+                return;
+            }
 
-        chatArea.scrollTo({
-            top: targetScrollTop,
-            behavior: 'smooth'
-        });
+            container.scrollTo({
+                top,
+                behavior: 'smooth'
+            });
 
-        if (chatArea.scrollTop !== targetScrollTop) {
-            chatArea.scrollTop = targetScrollTop;
-        }
+            requestAnimationFrame(() => {
+                const maxScroll =
+                    container.scrollHeight -
+                    container.clientHeight;
+
+                if (
+                    container.scrollTop <
+                    maxScroll - 1
+                ) {
+                    container.scrollTop =
+                        container.scrollHeight;
+                }
+            });
+        };
+
+        requestAnimationFrame(
+            performScroll
+        );
     }
 
 
@@ -576,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         indicator.appendChild(text);
         chatArea.appendChild(indicator);
-        scrollConversationToBottom();
+        scrollConversationToBottom(true);
     }
 
 
@@ -584,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const indicator = document.getElementById('processing-indicator');
         if (indicator) {
             indicator.remove();
+            scrollConversationToBottom(true);
         }
     }
 
@@ -609,7 +643,6 @@ document.addEventListener('DOMContentLoaded', () => {
     //      CHAT LAYOUT
     //
     // Conversation Mode:
-    //      🎙️
     //      APEX VOICE MODE
     //      LISTENING / THINKING / SPEAKING
     //
@@ -1608,7 +1641,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
-        scrollConversationToBottom();
+        scrollConversationToBottom(true);
     }
 
 
@@ -1648,7 +1681,7 @@ document.addEventListener('DOMContentLoaded', () => {
             element.remove();
         }
 
-        scrollConversationToBottom();
+        scrollConversationToBottom(true);
     }
 
 
@@ -2578,14 +2611,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // EMOJI -> SPOKEN MEANING
     // =========================================================
     //
-    // The UI keeps the emoji.
+    // Assistant responses keep emoji in chat.
     //
     // Example:
     //
     // Screen:
-    // "Great job! 😊"
+    // "Great job!"
     //
-    // Voice:
+    // Voice (with emoji in response):
     // "Great job! Glad."
     //
     // Unknown emojis are removed from speech
