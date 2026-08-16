@@ -43,6 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatArea =
         document.getElementById('chatArea');
 
+    const conversationScrollContainer =
+        document.querySelector(
+            '.panel-conversation > .panel-body.panel-scroll'
+        );
+
     const welcomeCard =
         document.getElementById('welcomeCard');
 
@@ -541,68 +546,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function findScrollableAncestor(el) {
-        if (!el) return null;
-        let cur = el;
-        while (cur && cur !== document.body) {
-            try {
-                const style = window.getComputedStyle(cur);
-                const overflowY = style ? style.overflowY : '';
-                const isScrollable = overflowY === 'auto' || overflowY === 'scroll';
-                if (isScrollable && cur.scrollHeight > cur.clientHeight) {
-                    return cur;
-                }
-            } catch (e) {
-                // ignore and continue
-            }
-            cur = cur.parentElement;
+    const APEX_SCROLL_DEBUG = false;
+
+
+    function scrollConversationToBottom() {
+        const container =
+            conversationScrollContainer;
+
+        if (!container) {
+            console.warn(
+                'APEX: conversation scroll container not found.'
+            );
+            return;
         }
-        return null;
-    }
 
-
-    function getConversationScrollContainer() {
-        // Prefer an ancestor that actually scrolls and is constrained.
-        const sc = findScrollableAncestor(chatArea) || findScrollableAncestor(document.getElementById('chatArea'));
-        if (sc) return sc;
-
-        // Fallback to any element with .panel-scroll class that has overflow.
-        const panelScroll = document.querySelector('.panel-conversation .panel-scroll');
-        if (panelScroll && panelScroll.scrollHeight > panelScroll.clientHeight) return panelScroll;
-
-        // As a last resort return chatArea itself (it may scroll in some layouts).
-        return chatArea || null;
-    }
-
-
-    function scrollConversationToBottom(instant = false) {
-        const container = getConversationScrollContainer();
-        if (!container) return;
-
-        // Use double requestAnimationFrame to ensure layout is stable.
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                try {
-                    const top = container.scrollHeight;
-                    if (instant) {
-                        container.scrollTop = top;
-                        return;
-                    }
+                container.scrollTop =
+                    container.scrollHeight;
 
-                    // Smooth where supported
-                    if (typeof container.scrollTo === 'function') {
-                        container.scrollTo({ top, behavior: 'smooth' });
-                    } else {
-                        container.scrollTop = top;
-                    }
+                const maxScroll =
+                    container.scrollHeight -
+                    container.clientHeight;
 
-                    // Final snap to ensure exact position
-                    const maxScroll = container.scrollHeight - container.clientHeight;
-                    if (container.scrollTop < maxScroll - 1) {
-                        container.scrollTop = container.scrollHeight;
-                    }
-                } catch (e) {
-                    // ignore
+                if (
+                    container.scrollTop <
+                    maxScroll
+                ) {
+                    container.scrollTop =
+                        maxScroll;
+                }
+
+                if (APEX_SCROLL_DEBUG) {
+                    console.log(
+                        'APEX SCROLL',
+                        {
+                            scrollTop:
+                                container.scrollTop,
+                            scrollHeight:
+                                container.scrollHeight,
+                            clientHeight:
+                                container.clientHeight,
+                            maxScroll
+                        }
+                    );
                 }
             });
         });
@@ -637,8 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
         indicator.appendChild(text);
         chatArea.appendChild(indicator);
 
-        // Scroll the actual container, not necessarily chatArea.
-        scrollConversationToBottom(true);
+        scrollConversationToBottom();
     }
 
 
@@ -646,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const indicator = document.getElementById('processing-indicator');
         if (indicator) {
             indicator.remove();
-            scrollConversationToBottom(true);
+            scrollConversationToBottom();
         }
     }
 
@@ -1670,7 +1656,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
-        scrollConversationToBottom(true);
+        scrollConversationToBottom();
     }
 
 
@@ -1710,7 +1696,7 @@ document.addEventListener('DOMContentLoaded', () => {
             element.remove();
         }
 
-        scrollConversationToBottom(true);
+        scrollConversationToBottom();
     }
 
 
@@ -3252,6 +3238,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     createConversationVisual();
+
+    if (
+        chatArea &&
+        conversationScrollContainer
+    ) {
+        const conversationObserver =
+            new MutationObserver(() => {
+                scrollConversationToBottom();
+            });
+
+        conversationObserver.observe(
+            chatArea,
+            {
+                childList: true,
+                subtree: true
+            }
+        );
+    }
+
+    if (
+        chatArea &&
+        conversationScrollContainer &&
+        'ResizeObserver' in window
+    ) {
+        const conversationResizeObserver =
+            new ResizeObserver(() => {
+                scrollConversationToBottom();
+            });
+
+        conversationResizeObserver.observe(
+            chatArea
+        );
+    }
 
     initToolsList();
 

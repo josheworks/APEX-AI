@@ -209,6 +209,12 @@ body {
     overflow-x: hidden;
 }
 
+.panel-conversation > .panel-body.panel-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+}
+
 .panel-footer {
     padding: 2px 10px 4px;
     color: rgba(148, 163, 184, 0.12);
