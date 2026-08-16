@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         msgSpan.textContent =
-            message;
+            sanitizeDisplayText(message);
 
 
         entry.appendChild(timeSpan);
@@ -521,64 +521,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function sanitizeDisplayText(text) {
-        return String(text ?? '')
-            .replace(/\*\*(.+?)\*\*/g, '$1')
-            .replace(/\r\n/g, '\n');
+        let out = String(text ?? '');
+
+        // 1) Remove markdown bold markers **text** -> text (non-greedy)
+        out = out.replace(/\*\*(.+?)\*\*/g, '$1');
+
+        // 2) Remove Unicode emoji characters. Use Unicode property escapes when available,
+        //    otherwise fall back to common emoji ranges.
+        try {
+            out = out.replace(/\p{Extended_Pictographic}/gu, '');
+        } catch (e) {
+            out = out.replace(/[\u{1F300}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}]/gu, '');
+        }
+
+        // 3) Normalize newlines
+        out = out.replace(/\r\n/g, '\n');
+
+        return out;
+    }
+
+
+    function findScrollableAncestor(el) {
+        if (!el) return null;
+        let cur = el;
+        while (cur && cur !== document.body) {
+            try {
+                const style = window.getComputedStyle(cur);
+                const overflowY = style ? style.overflowY : '';
+                const isScrollable = overflowY === 'auto' || overflowY === 'scroll';
+                if (isScrollable && cur.scrollHeight > cur.clientHeight) {
+                    return cur;
+                }
+            } catch (e) {
+                // ignore and continue
+            }
+            cur = cur.parentElement;
+        }
+        return null;
     }
 
 
     function getConversationScrollContainer() {
-        if (!chatArea) {
-            return null;
-        }
+        // Prefer an ancestor that actually scrolls and is constrained.
+        const sc = findScrollableAncestor(chatArea) || findScrollableAncestor(document.getElementById('chatArea'));
+        if (sc) return sc;
 
-        return (
-            chatArea.closest('.panel-scroll') ||
-            chatArea.parentElement
-        );
+        // Fallback to any element with .panel-scroll class that has overflow.
+        const panelScroll = document.querySelector('.panel-conversation .panel-scroll');
+        if (panelScroll && panelScroll.scrollHeight > panelScroll.clientHeight) return panelScroll;
+
+        // As a last resort return chatArea itself (it may scroll in some layouts).
+        return chatArea || null;
     }
 
 
     function scrollConversationToBottom(instant = false) {
-        const container =
-            getConversationScrollContainer();
+        const container = getConversationScrollContainer();
+        if (!container) return;
 
-        if (!container) {
-            return;
-        }
-
-        const performScroll = () => {
-            const top =
-                container.scrollHeight;
-
-            if (instant) {
-                container.scrollTop = top;
-                return;
-            }
-
-            container.scrollTo({
-                top,
-                behavior: 'smooth'
-            });
-
+        // Use double requestAnimationFrame to ensure layout is stable.
+        requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                const maxScroll =
-                    container.scrollHeight -
-                    container.clientHeight;
+                try {
+                    const top = container.scrollHeight;
+                    if (instant) {
+                        container.scrollTop = top;
+                        return;
+                    }
 
-                if (
-                    container.scrollTop <
-                    maxScroll - 1
-                ) {
-                    container.scrollTop =
-                        container.scrollHeight;
+                    // Smooth where supported
+                    if (typeof container.scrollTo === 'function') {
+                        container.scrollTo({ top, behavior: 'smooth' });
+                    } else {
+                        container.scrollTop = top;
+                    }
+
+                    // Final snap to ensure exact position
+                    const maxScroll = container.scrollHeight - container.clientHeight;
+                    if (container.scrollTop < maxScroll - 1) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } catch (e) {
+                    // ignore
                 }
             });
-        };
-
-        requestAnimationFrame(
-            performScroll
-        );
+        });
     }
 
 
@@ -609,6 +636,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         indicator.appendChild(text);
         chatArea.appendChild(indicator);
+
+        // Scroll the actual container, not necessarily chatArea.
         scrollConversationToBottom(true);
     }
 
