@@ -267,7 +267,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.classList.remove(
                     'tool-item-active',
                     'tool-item-done',
-                    'tool-item-idle'
+                    'tool-item-idle',
+                    'tool-item-error'
                 );
 
 
@@ -276,12 +277,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     toolName
                 ) {
 
-                    item.classList.add(
+                    const nextClass =
                         status === 'active'
                             ? 'tool-item-active'
                             : status === 'done'
                                 ? 'tool-item-done'
-                                : 'tool-item-idle'
+                                : status === 'error'
+                                    ? 'tool-item-error'
+                                    : 'tool-item-idle';
+
+                    item.classList.add(
+                        nextClass
                     );
 
                 } else {
@@ -311,7 +317,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 item.classList.remove(
                     'tool-item-active',
-                    'tool-item-done'
+                    'tool-item-done',
+                    'tool-item-error'
                 );
 
                 item.classList.add(
@@ -319,6 +326,113 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
             }
         );
+    }
+
+
+    function getUsedToolsFromResponse(data) {
+        const names = [];
+
+        if (Array.isArray(data?.tools_used)) {
+            data.tools_used.forEach(name => {
+                if (name && !names.includes(name)) {
+                    names.push(name);
+                }
+            });
+        }
+
+        if (data?.tool_used && !names.includes(data.tool_used)) {
+            names.push(data.tool_used);
+        }
+
+        if (Array.isArray(data?.tool_events)) {
+            data.tool_events.forEach(event => {
+                const toolName = event?.tool || event?.name || event?.tool_name;
+                if (toolName && !names.includes(toolName)) {
+                    names.push(toolName);
+                }
+            });
+        }
+
+        return names;
+    }
+
+
+    function applyToolActivityMetadata(data) {
+        const toolsUsed = getUsedToolsFromResponse(data);
+        const toolEvents = Array.isArray(data?.tool_events) ? data.tool_events : [];
+
+        resetToolStatus();
+
+        if (toolEvents.length) {
+            const statusByTool = {};
+
+            toolEvents.forEach(event => {
+                const toolName = event?.tool || event?.name || event?.tool_name;
+                if (!toolName) {
+                    return;
+                }
+
+                logActivity(
+                    'TOOL',
+                    toolName,
+                    'tool'
+                );
+
+                statusByTool[toolName] = event?.status === 'error' ? 'error' : 'done';
+            });
+
+            toolsList?.querySelectorAll('.tool-item').forEach(item => {
+                const toolName = item.dataset.tool;
+                if (!toolName) {
+                    return;
+                }
+
+                item.classList.remove(
+                    'tool-item-active',
+                    'tool-item-done',
+                    'tool-item-idle',
+                    'tool-item-error'
+                );
+
+                if (statusByTool[toolName]) {
+                    item.classList.add(
+                        statusByTool[toolName] === 'error'
+                            ? 'tool-item-error'
+                            : 'tool-item-done'
+                    );
+                } else {
+                    item.classList.add('tool-item-idle');
+                }
+            });
+
+            logActivity(
+                'APEX',
+                'Tool result received',
+                'apex'
+            );
+        } else if (toolsUsed.length) {
+            toolsUsed.forEach(toolName => {
+                const item = toolsList?.querySelector(`.tool-item[data-tool="${CSS.escape(toolName)}"]`);
+                if (!item) {
+                    return;
+                }
+                item.classList.remove(
+                    'tool-item-active',
+                    'tool-item-done',
+                    'tool-item-idle',
+                    'tool-item-error'
+                );
+                item.classList.add('tool-item-done');
+            });
+        }
+
+        if (toolsUsed.length) {
+            logActivity(
+                'APEX',
+                'Response ready',
+                'apex'
+            );
+        }
     }
 
 

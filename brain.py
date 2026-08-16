@@ -472,6 +472,8 @@ def _run_openai_compatible_tool_loop(
 
     final_tool_name = None
     last_tool_result = None
+    executed_tools = []
+    tool_events = []
 
 
     for tool_round in range(
@@ -513,10 +515,12 @@ def _run_openai_compatible_tool_loop(
 
             if content:
 
-                return (
-                    content.strip(),
-                    final_tool_name
-                )
+                return {
+                    "text": content.strip(),
+                    "tool_used": final_tool_name,
+                    "tools_used": executed_tools,
+                    "tool_events": tool_events,
+                }
 
             break
 
@@ -567,6 +571,11 @@ def _run_openai_compatible_tool_loop(
                 "name"
             ]
 
+            if tool_name not in executed_tools:
+                executed_tools.append(
+                    tool_name
+                )
+
 
             if final_tool_name is None:
 
@@ -583,6 +592,14 @@ def _run_openai_compatible_tool_loop(
                     ]
                 )
             )
+
+            tool_events.append({
+                "tool": tool_name,
+                "status": "done" if last_tool_result.get("success", False) else "error",
+                "success": bool(last_tool_result.get("success", False)),
+                "result": last_tool_result.get("result"),
+                "error": last_tool_result.get("error"),
+            })
 
 
             # OpenAI-compatible tool result.
@@ -629,13 +646,15 @@ def _run_openai_compatible_tool_loop(
         and final_tool_name is not None
     ):
 
-        return (
-            _format_tool_response(
+        return {
+            "text": _format_tool_response(
                 final_tool_name,
                 last_tool_result
             ),
-            final_tool_name
-        )
+            "tool_used": final_tool_name,
+            "tools_used": executed_tools,
+            "tool_events": tool_events,
+        }
 
 
     raise RuntimeError(
@@ -745,6 +764,8 @@ def _run_gemini_tool_loop(
 
     final_tool_name = None
     last_tool_result = None
+    executed_tools = []
+    tool_events = []
 
     conversation_context = (
         _get_conversation_context()
@@ -820,10 +841,12 @@ def _run_gemini_tool_loop(
 
             if response.text:
 
-                return (
-                    response.text.strip(),
-                    final_tool_name
-                )
+                return {
+                    "text": response.text.strip(),
+                    "tool_used": final_tool_name,
+                    "tools_used": executed_tools,
+                    "tool_events": tool_events,
+                }
 
             break
 
@@ -847,6 +870,11 @@ def _run_gemini_tool_loop(
                 "name"
             ]
 
+            if tool_name not in executed_tools:
+                executed_tools.append(
+                    tool_name
+                )
+
 
             if final_tool_name is None:
 
@@ -863,6 +891,14 @@ def _run_gemini_tool_loop(
                     ]
                 )
             )
+
+            tool_events.append({
+                "tool": tool_name,
+                "status": "done" if last_tool_result.get("success", False) else "error",
+                "success": bool(last_tool_result.get("success", False)),
+                "result": last_tool_result.get("result"),
+                "error": last_tool_result.get("error"),
+            })
 
 
             _append_conversation(
@@ -896,13 +932,15 @@ def _run_gemini_tool_loop(
         and final_tool_name is not None
     ):
 
-        return (
-            _format_tool_response(
+        return {
+            "text": _format_tool_response(
                 final_tool_name,
                 last_tool_result
             ),
-            final_tool_name
-        )
+            "tool_used": final_tool_name,
+            "tools_used": executed_tools,
+            "tool_events": tool_events,
+        }
 
 
     raise RuntimeError(
@@ -1003,17 +1041,12 @@ def _fallback_chat_response(
 # MAIN AI RESPONSE
 # ============================================================
 
-def get_ai_response(
+def get_ai_response_with_metadata(
     user_message: str
 ):
     """
-    Main APEX AI entry point.
-
-    Priority:
-
-        1. OpenRouter
-        2. Groq
-        3. Gemini
+    Main APEX AI entry point with extended tool metadata for the UI.
+    Returns a 4-tuple: (final_text, tool_used, tools_used, tool_events).
     """
 
     if (
@@ -1026,14 +1059,9 @@ def get_ai_response(
         )
 
 
-    # Update memory.
-
     memory_manager.update_user_memory(
         user_message
     )
-
-
-    # Add user message once.
 
     _append_conversation(
         "user",
@@ -1043,24 +1071,43 @@ def get_ai_response(
 
     try:
 
-        final_text, tool_used = (
-            _fallback_chat_response(
-                user_message
+        result = _fallback_chat_response(
+            user_message
+        )
+
+        final_text = result.get(
+            "text",
+            result.get(
+                "response",
+                ""
             )
         )
 
+        tool_used = result.get(
+            "tool_used"
+        )
+
+        tools_used = result.get(
+            "tools_used",
+            []
+        )
+
+        tool_events = result.get(
+            "tool_events",
+            []
+        )
 
         _append_conversation(
             "assistant",
             final_text
         )
 
-
         return (
             final_text,
-            tool_used
+            tool_used,
+            tools_used,
+            tool_events,
         )
-
 
     except Exception as error:
 
@@ -1068,6 +1115,26 @@ def get_ai_response(
             f"All LLM providers failed: "
             f"{error}"
         )
+
+
+def get_ai_response(
+    user_message: str
+):
+    """
+    Backwards-compatible APEX AI entry point.
+    Returns: (final_text, tool_used)
+    """
+
+    final_text, tool_used, _, _ = (
+        get_ai_response_with_metadata(
+            user_message
+        )
+    )
+
+    return (
+        final_text,
+        tool_used
+    )
 
 
 # ============================================================

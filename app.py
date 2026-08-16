@@ -81,13 +81,17 @@ def chat_endpoint(request: ChatRequest):
     and returning APEX response.
     """
     try:
-        ai_response, tool_used = brain.get_ai_response(request.message)
+        ai_response, tool_used, tools_used, tool_events = brain.get_ai_response_with_metadata(request.message)
         res = {
             "success": True,
             "response": ai_response
         }
         if tool_used:
             res["tool_used"] = tool_used
+        if tools_used:
+            res["tools_used"] = tools_used
+        if tool_events:
+            res["tool_events"] = tool_events
         return res
     except QuotaExhaustedException:
         return JSONResponse(
@@ -139,7 +143,7 @@ async def voice_endpoint(file: UploadFile = File(...)):
             )
 
         # 2. Pass transcribed text through existing APEX brain (with tools support)
-        ai_response, tool_used = brain.get_ai_response(transcription)
+        ai_response, tool_used, tools_used, tool_events = brain.get_ai_response_with_metadata(transcription)
 
         res = {
             "success": True,
@@ -148,6 +152,10 @@ async def voice_endpoint(file: UploadFile = File(...)):
         }
         if tool_used:
             res["tool_used"] = tool_used
+        if tools_used:
+            res["tools_used"] = tools_used
+        if tool_events:
+            res["tool_events"] = tool_events
         return res
 
     except QuotaExhaustedException:
