@@ -921,6 +921,7 @@ body {
         flex-direction: column;
         gap: 8px;
         height: calc(100vh - 146px);
+        height: calc(100dvh - 146px);
         min-height: 0;
         overflow: hidden;
         padding: 0;
@@ -933,7 +934,7 @@ body {
 
     .panel-conversation {
         order: 1;
-        flex: 1 1 auto;
+        flex: 1 1 0;
         min-height: 0;
         display: flex;
         flex-direction: column;
@@ -941,6 +942,7 @@ body {
 
     .panel-conversation .panel-body {
         flex: 1 1 auto;
+        min-height: 0;
         overflow-y: auto;
         padding: 8px;
         padding-bottom: 16px;
@@ -949,15 +951,27 @@ body {
     .panel-apex-status {
         order: 2;
         flex: 0 0 auto;
+        flex-shrink: 0;
         margin-top: 4px;
     }
 
     .panel-collapsible {
         order: 3;
+        flex: 0 0 auto;
+        flex-shrink: 0;
+        min-height: 42px;
         width: 100%;
         border-radius: 10px;
         overflow: hidden;
         background: rgba(2,6,10,0.35);
+    }
+
+    .panel-collapsible:not([open]) {
+        min-height: 42px;
+    }
+
+    .panel-collapsible:not([open]) .panel-title {
+        min-height: 40px;
     }
 
     .panel-collapsible summary.panel-title {

@@ -546,6 +546,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+    function sanitizeForSpeech(text) {
+        if (!text) {
+            return '';
+        }
+
+        return String(text)
+            .replace(
+                /\*\*(.*?)\*\*/gs,
+                '$1'
+            )
+            .replace(
+                /(?<!\w)\*([^*\n]+)\*(?!\w)/g,
+                '$1'
+            )
+            .replace(
+                /#/g,
+                ''
+            )
+            .replace(
+                /\s+/g,
+                ' '
+            )
+            .trim();
+    }
+
+
     const APEX_SCROLL_DEBUG = false;
 
 
@@ -2829,7 +2855,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const speechText =
             convertEmojiForSpeech(
-                text
+                sanitizeForSpeech(
+                    text
+                )
             );
 
 
