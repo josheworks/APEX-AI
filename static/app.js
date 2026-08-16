@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ) {
 
             micLabel.textContent =
-                '■ STOP';
+                'STOP';
 
             micBtn.classList.add(
                 'listening'
@@ -485,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ) {
 
             micLabel.textContent =
-                '◼ INTERRUPT';
+                'INTERRUPT';
 
             micBtn.classList.add(
                 'speaking'
@@ -498,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
 
             micLabel.textContent =
-                '🎙 LISTEN';
+                'LISTEN';
 
             micBtn.classList.remove(
                 'listening',
@@ -516,6 +516,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
             systemFooterTime.textContent =
                 formatTime();
+        }
+    }
+
+
+    function sanitizeDisplayText(text) {
+        return String(text ?? '')
+            .replace(/\*\*(.+?)\*\*/g, '$1')
+            .replace(/\r\n/g, '\n');
+    }
+
+
+    function scrollConversationToBottom() {
+        if (!chatArea) {
+            return;
+        }
+
+        const targetScrollTop = chatArea.scrollHeight;
+
+        if (chatArea.scrollTop === targetScrollTop) {
+            return;
+        }
+
+        chatArea.scrollTo({
+            top: targetScrollTop,
+            behavior: 'smooth'
+        });
+
+        if (chatArea.scrollTop !== targetScrollTop) {
+            chatArea.scrollTop = targetScrollTop;
+        }
+    }
+
+
+    function getProcessingLabel(toolName) {
+        if (toolName && TOOL_LABELS[toolName]) {
+            return TOOL_LABELS[toolName];
+        }
+
+        return 'Thinking...';
+    }
+
+
+    function showProcessingIndicator(label = 'Thinking...') {
+        if (!chatArea) {
+            return;
+        }
+
+        removeProcessingIndicator();
+
+        const indicator = document.createElement('div');
+        indicator.className = 'processing-indicator';
+        indicator.id = 'processing-indicator';
+        indicator.setAttribute('aria-live', 'polite');
+
+        const text = document.createElement('span');
+        text.className = 'processing-text';
+        text.textContent = label;
+
+        indicator.appendChild(text);
+        chatArea.appendChild(indicator);
+        scrollConversationToBottom();
+    }
+
+
+    function removeProcessingIndicator() {
+        const indicator = document.getElementById('processing-indicator');
+        if (indicator) {
+            indicator.remove();
         }
     }
 
@@ -1434,8 +1502,11 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
+        const displayText =
+            sanitizeDisplayText(text);
+
         msgBody.textContent =
-            text;
+            displayText;
 
 
         msgBubble.appendChild(
@@ -1472,8 +1543,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
-        chatArea.scrollTop =
-            chatArea.scrollHeight;
+        scrollConversationToBottom();
     }
 
 
@@ -1505,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const icon = document.createElement('span');
         icon.className = 'tool-icon';
-        icon.textContent = '⚡';
+        icon.textContent = '';
         const labelSpan = document.createElement('span');
         labelSpan.className = 'tool-label';
         labelSpan.textContent =
@@ -1538,8 +1608,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
 
 
-        chatArea.scrollTop =
-            chatArea.scrollHeight;
+        scrollConversationToBottom();
     }
 
 
@@ -1578,6 +1647,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             element.remove();
         }
+
+        scrollConversationToBottom();
     }
 
 
@@ -1605,6 +1676,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         userInput.value =
             '';
+
+
+        showProcessingIndicator(
+            'Thinking...'
+        );
 
 
         setState(
@@ -1640,6 +1716,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.tool_used
             ) {
 
+                const toolLabel =
+                    getProcessingLabel(
+                        data.tool_used
+                    );
+
+                showProcessingIndicator(
+                    toolLabel
+                );
+
                 appendToolIndicator(
                     data.tool_used
                 );
@@ -1655,6 +1740,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
                 removeToolIndicator();
+                removeProcessingIndicator();
             }
 
 
@@ -1679,13 +1765,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const msg =
                     "Oops, my AI brain has hit " +
-                    "today's free quota 😅. " +
+                    "today's free quota. " +
                     "My built-in tools are still " +
                     "available! Try: 'What time is it?', " +
                     "'Open YouTube', or " +
                     "'Calculate 25 * 17'.";
 
 
+                removeProcessingIndicator();
                 appendMessage(
                     'APEX',
                     msg
@@ -1707,7 +1794,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.error ||
                     'Failed to get response from APEX.';
 
-
+                removeProcessingIndicator();
                 appendMessage(
                     'APEX',
                     `[Error]: ${errorText}`
@@ -1729,7 +1816,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 err
             );
 
-
+            removeProcessingIndicator();
             appendMessage(
                 'APEX',
                 '[Error]: Network error. ' +
@@ -1755,6 +1842,10 @@ document.addEventListener('DOMContentLoaded', () => {
         audioBlob,
         mimeType
     ) {
+
+        showProcessingIndicator(
+            'Thinking...'
+        );
 
         setState(
             'THINKING'
@@ -1798,6 +1889,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.tool_used
             ) {
 
+                const toolLabel =
+                    getProcessingLabel(
+                        data.tool_used
+                    );
+
+                showProcessingIndicator(
+                    toolLabel
+                );
+
                 appendToolIndicator(
                     data.tool_used
                 );
@@ -1813,6 +1913,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
                 removeToolIndicator();
+                removeProcessingIndicator();
             }
 
 
@@ -1843,11 +1944,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const msg =
                     "Oops, my AI brain has hit " +
-                    "today's free quota 😅. " +
+                    "today's free quota. " +
                     "My built-in tools are still " +
                     "available!";
 
 
+                removeProcessingIndicator();
                 appendMessage(
                     'APEX',
                     msg
@@ -1868,7 +1970,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.error ||
                     'Failed to process voice input.';
 
-
+                removeProcessingIndicator();
                 showNotification(
                     errorText
                 );
@@ -1884,7 +1986,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 err
             );
 
-
+            removeProcessingIndicator();
             showNotification(
                 'Network error while sending audio to APEX.'
             );
@@ -1901,6 +2003,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleResponseFinished() {
 
+        removeProcessingIndicator();
         setState(
             'READY'
         );
