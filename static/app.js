@@ -1,4 +1,4 @@
-// APEX v0.1 Voice Interface Application
+﻿// APEX v0.1 Voice Interface Application
 // Conversation Mode
 //
 // Features:
@@ -46,6 +46,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const conversationScrollContainer =
         document.querySelector(
             '.panel-conversation > .panel-body.panel-scroll'
+        );
+
+    const activityScrollContainer =
+        document.querySelector(
+            '.panel-activity > .panel-body.panel-scroll'
         );
 
     const welcomeCard =
@@ -193,8 +198,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        activityLog.scrollTop =
-            activityLog.scrollHeight;
+        // Ensure the live activity panel scrolls to show the newest entries.
+        scrollActivityToBottom();
+    }
+
+
+    // MutationObserver to catch any dynamic mutations inserting activity entries
+    // and keep the activity panel scrolled to the bottom as a safety net.
+    if (activityLog) {
+        try {
+            const activityObserver = new MutationObserver(() => {
+                scrollActivityToBottom();
+            });
+
+            activityObserver.observe(activityLog, {
+                childList: true,
+                subtree: true
+            });
+        } catch (e) {
+            // ignore observer failures
+        }
+    }
+
+    // If entries already exist, ensure the activity panel starts scrolled to bottom.
+    if (activityLog && activityLog.children.length) {
+        scrollActivityToBottom();
     }
 
 
@@ -743,6 +771,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return 'Thinking...';
     }
+
+function getActivityScrollContainer() {
+    const activityLog = document.getElementById("activityLog");
+    if (!activityLog) return null;
+
+    // If the activity log itself is scrollable, use it.
+    const logStyle = getComputedStyle(activityLog);
+
+    if (
+        (logStyle.overflowY === "auto" || logStyle.overflowY === "scroll") &&
+        activityLog.scrollHeight > activityLog.clientHeight
+    ) {
+        return activityLog;
+    }
+
+    // Otherwise find the nearest scrollable parent.
+    let parent = activityLog.parentElement;
+
+    while (parent) {
+        const style = getComputedStyle(parent);
+
+        if (
+            (style.overflowY === "auto" || style.overflowY === "scroll") &&
+            parent.scrollHeight > parent.clientHeight
+        ) {
+            return parent;
+        }
+
+        parent = parent.parentElement;
+    }
+
+    return null;
+}
+
+function scrollActivityToBottom() {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const container = getActivityScrollContainer();
+
+            if (!container) return;
+
+            container.scrollTop = container.scrollHeight;
+        });
+    });
+}
 
 
     function showProcessingIndicator(label = 'Thinking...') {
@@ -1388,6 +1461,24 @@ document.addEventListener('DOMContentLoaded', () => {
             "Opening application"
     };
 
+    // Fetch real backend tool metadata (labels) and merge with default TOOL_LABELS.
+    async function fetchToolMetadata() {
+        try {
+            const resp = await fetch(buildApiUrl('/tools'));
+            const data = await resp.json();
+            if (data && data.success && data.labels) {
+                Object.entries(data.labels).forEach(([k, v]) => {
+                    TOOL_LABELS[k] = v;
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to fetch tool metadata:', e);
+        } finally {
+            // Ensure tools list is initialized even if metadata fetch fails.
+            initToolsList();
+        }
+    }
+
 
     // =========================================================
     // API base configuration (development proxy-friendly)
@@ -1841,6 +1932,182 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // =========================================================
+    // INSTANT PROCESSING ACKNOWLEDGEMENT
+    // =========================================================
+
+    // Pool of acknowledgement phrases for immediate local feedback.
+    // These are NOT sent to the backend or LLM.
+    const ACKNOWLEDGEMENT_PHRASES = [
+        "On it, Boss.",
+        "Got it, Boss.",
+        "Working on it, Boss.",
+        "One moment, Boss.",
+        "Let me check that.",
+        "Checking now, Boss.",
+        "I'm on it.",
+        "Give me a second, Boss.",
+        "Processing that now.",
+        "Right away, Boss.",
+        "Let me handle that.",
+        "Looking into it now.",
+        "Working on that.",
+        "Checking the details now.",
+        "One second, Boss."
+    ];
+
+    // Context-aware acknowledgement mapping.
+    // If a tool is being used, select an appropriate message.
+    const ACKNOWLEDGEMENT_BY_TOOL = {
+        web_search: "Let me search that for you, Boss.",
+        calculate: "Calculating now, Boss.",
+        current_time: "Getting the time for you.",
+        weather: "Checking the weather, Boss.",
+        open_link: "Opening that now.",
+        default: "On it, Boss."
+    };
+
+    const ACKNOWLEDGEMENT_DELAY_MS = 3000;
+
+    function createRequestState() {
+        return {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            ackTimer: null,
+            ackActive: false
+        };
+    }
+
+    let activeRequestState = null;
+
+    function getAcknowledgement(toolName) {
+        if (toolName && ACKNOWLEDGEMENT_BY_TOOL[toolName]) {
+            return ACKNOWLEDGEMENT_BY_TOOL[toolName];
+        }
+        return ACKNOWLEDGEMENT_PHRASES[
+            Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)
+        ];
+    }
+
+    function clearProcessingAcknowledgement(requestState = activeRequestState, { stopSpeech = false } = {}) {
+        if (!requestState) {
+            return;
+        }
+
+        if (requestState.ackTimer) {
+            clearTimeout(requestState.ackTimer);
+            requestState.ackTimer = null;
+        }
+
+        if (stopSpeech && requestState.ackActive && 'speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+
+        const ackDiv = document.getElementById('acknowledgement-message');
+        if (ackDiv && (!activeRequestState || requestState.id === activeRequestState.id)) {
+            ackDiv.remove();
+            scrollConversationToBottom();
+        }
+
+        requestState.ackActive = false;
+    }
+
+    function scheduleProcessingAcknowledgement(requestState, toolName = null) {
+        if (!requestState) {
+            return;
+        }
+
+        if (requestState.ackTimer) {
+            clearTimeout(requestState.ackTimer);
+        }
+
+        requestState.ackTimer = setTimeout(() => {
+            if (!activeRequestState || requestState.id !== activeRequestState.id) {
+                return;
+            }
+
+            const ackText = getAcknowledgement(toolName);
+            requestState.ackActive = true;
+            showAcknowledgement(ackText);
+            speakAcknowledgement(ackText);
+            requestState.ackTimer = null;
+        }, ACKNOWLEDGEMENT_DELAY_MS);
+    }
+
+    // Show an acknowledgement message in the chat without storing it in memory.
+    function showAcknowledgement(text) {
+        if (!chatArea) {
+            return;
+        }
+
+        const existing = document.getElementById('acknowledgement-message');
+        if (existing) {
+            existing.remove();
+        }
+
+        const ackDiv = document.createElement('div');
+        ackDiv.className = 'acknowledgement-message';
+        ackDiv.id = 'acknowledgement-message';
+        ackDiv.setAttribute('aria-live', 'polite');
+
+        const msgBubble = document.createElement('div');
+        msgBubble.classList.add('message-bubble', 'apex-message');
+
+        const msgHeader = document.createElement('div');
+        msgHeader.classList.add('message-header');
+        msgHeader.textContent = `[${formatTime()}] APEX`;
+
+        const msgBody = document.createElement('div');
+        msgBody.classList.add('message-body');
+        msgBody.textContent = text;
+
+        msgBubble.appendChild(msgHeader);
+        msgBubble.appendChild(msgBody);
+
+        ackDiv.appendChild(msgBubble);
+        chatArea.appendChild(ackDiv);
+
+        scrollConversationToBottom();
+    }
+
+    // Remove the acknowledgement message from the chat.
+    function removeAcknowledgement(requestState = activeRequestState, { stopSpeech = false } = {}) {
+        clearProcessingAcknowledgement(requestState, { stopSpeech });
+    }
+
+    // Speak the acknowledgement using TTS (concurrent with backend processing).
+    function speakAcknowledgement(text) {
+        if (!('speechSynthesis' in window)) {
+            return;
+        }
+
+        const speechText = sanitizeForSpeech(text);
+        const utterance = new SpeechSynthesisUtterance(speechText);
+
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        const voices = window.speechSynthesis.getVoices();
+
+        const preferredVoice = voices.find(
+            voice =>
+                voice.lang.startsWith('en') &&
+                (
+                    voice.name.includes('Google') ||
+                    voice.name.includes('Natural') ||
+                    voice.name.includes('David') ||
+                    voice.name.includes('Zira')
+                )
+        );
+
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        // Ack speech is fire-and-forget; don't set handlers that interfere with state.
+        window.speechSynthesis.speak(utterance);
+    }
+
+
+    // =========================================================
     // SEND TEXT MESSAGE
     // =========================================================
 
@@ -1855,6 +2122,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const previousRequestState = activeRequestState;
+        if (previousRequestState) {
+            clearProcessingAcknowledgement(previousRequestState, {
+                stopSpeech: previousRequestState.ackActive
+            });
+        }
+
+        const requestState = createRequestState();
+        activeRequestState = requestState;
+        scheduleProcessingAcknowledgement(requestState);
 
         appendMessage(
             'USER',
@@ -1865,7 +2142,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.value =
             '';
 
-
+        // Begin backend processing without waiting for TTS.
         showProcessingIndicator(
             'Thinking...'
         );
@@ -1899,6 +2176,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const data =
                 await response.json();
 
+            if (!activeRequestState || requestState.id !== activeRequestState.id) {
+                return;
+            }
+
+            // Remove the acknowledgement now that we have the real response.
+            clearProcessingAcknowledgement(requestState, {
+                stopSpeech: requestState.ackActive
+            });
+            activeRequestState = null;
 
             if (
                 data.tool_used
@@ -1999,12 +2285,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
 
+            if (!activeRequestState || requestState.id !== activeRequestState.id) {
+                return;
+            }
+
             console.error(
                 'Fetch error:',
                 err
             );
 
             removeProcessingIndicator();
+            clearProcessingAcknowledgement(requestState, {
+                stopSpeech: requestState.ackActive
+            });
+            activeRequestState = null;
             appendMessage(
                 'APEX',
                 '[Error]: Network error. ' +
@@ -2031,6 +2325,17 @@ document.addEventListener('DOMContentLoaded', () => {
         mimeType
     ) {
 
+        const previousRequestState = activeRequestState;
+        if (previousRequestState) {
+            clearProcessingAcknowledgement(previousRequestState, {
+                stopSpeech: previousRequestState.ackActive
+            });
+        }
+
+        const requestState = createRequestState();
+        activeRequestState = requestState;
+        scheduleProcessingAcknowledgement(requestState);
+
         showProcessingIndicator(
             'Thinking...'
         );
@@ -2038,7 +2343,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setState(
             'THINKING'
         );
-
 
         const formData =
             new FormData();
@@ -2072,6 +2376,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const data =
                 await response.json();
 
+            if (!activeRequestState || requestState.id !== activeRequestState.id) {
+                return;
+            }
+
+            // Remove acknowledgement now that real response is ready.
+            clearProcessingAcknowledgement(requestState, {
+                stopSpeech: requestState.ackActive
+            });
+            activeRequestState = null;
 
             if (
                 data.tool_used
@@ -2169,12 +2482,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
 
+            if (!activeRequestState || requestState.id !== activeRequestState.id) {
+                return;
+            }
+
             console.error(
                 'Voice upload error:',
                 err
             );
 
             removeProcessingIndicator();
+            clearProcessingAcknowledgement(requestState, {
+                stopSpeech: requestState.ackActive
+            });
+            activeRequestState = null;
             showNotification(
                 'Network error while sending audio to APEX.'
             );
@@ -3156,7 +3477,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        // Stop APEX speech.
+        // Stop APEX speech and cancel any pending local acknowledgement.
+        clearProcessingAcknowledgement(activeRequestState, {
+            stopSpeech: !!(activeRequestState && activeRequestState.ackActive)
+        });
 
         if (
             'speechSynthesis' in
@@ -3414,7 +3738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
-    initToolsList();
+    fetchToolMetadata();
 
     updateApexStatusPanel(
         'READY'

@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import brain
+import tools
 from brain import QuotaExhaustedException
 
 app = FastAPI(
@@ -73,6 +74,27 @@ def health_check():
         "status": "ok",
         "assistant": "APEX"
     }
+
+
+@app.get("/tools")
+def tools_endpoint():
+    """
+    Returns available built-in tool metadata (OpenAI-compatible declarations)
+    and a simple labels map suitable for frontend display.
+    """
+    try:
+        tool_defs = tools.get_openai_tools()
+        labels = {}
+        for entry in tool_defs:
+            fn = entry.get('function') or {}
+            name = fn.get('name')
+            desc = fn.get('description', '')
+            label = desc.split('.')[0].strip() if desc else name
+            if name:
+                labels[name] = label
+        return {"success": True, "tools": tool_defs, "labels": labels}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
 
 @app.post("/chat")
 def chat_endpoint(request: ChatRequest):

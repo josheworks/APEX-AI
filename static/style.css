@@ -762,6 +762,34 @@ body {
    RESPONSIVE
    ========================================================= */
 
+/* Desktop/laptop: constrain activity panel body so it can internally scroll
+   without expanding beyond its grid row. Keeps mobile rules untouched. */
+@media (min-width: 600px) {
+    .panel-activity {
+        min-height: 0;
+        height: 100%;
+        max-height: 100%;
+        overflow: hidden;
+    }
+
+    .panel-activity > .panel-body.panel-scroll {
+        min-height: 0;
+        height: calc(100% - 47px);
+        max-height: calc(100% - 47px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        position: relative;
+    }
+
+    .panel-activity #activityLog {
+        position: static;
+        height: auto;
+        min-height: 0;
+        max-height: none;
+        overflow: visible;
+    }
+}
+
 @media (max-width: 900px) {
     .dashboard-grid {
         grid-template-columns: 1fr 1fr;
