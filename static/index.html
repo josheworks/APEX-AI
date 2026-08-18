@@ -29,8 +29,11 @@
         <!-- DASHBOARD GRID -->
         <div class="dashboard-grid">
             <!-- 2. SYSTEM STATUS PANEL (collapsible on mobile) -->
-            <details class="panel panel-system panel-collapsible" aria-label="System status">
-                <summary class="panel-title"><span class="panel-corner">┌─</span> SYSTEM STATUS <span class="panel-line">──────────────────</span><span class="panel-corner">┐</span> <span class="collapse-indicator">▸</span></summary>
+            <details class="panel panel-system panel-collapsible" aria-label="System status" open>
+                <summary class="panel-title">
+                    <span class="panel-title-text"><span class="panel-corner">┌─</span> SYSTEM STATUS <span class="panel-line">──────────────────</span><span class="panel-corner">┐</span></span>
+                    <button type="button" class="panel-toggle" aria-label="Minimize System Status" title="Minimize System Status">−</button>
+                </summary>
                 <div class="panel-body">
                     <div class="status-row" data-subsystem="core">
                         <span class="status-label">CORE</span>
@@ -62,8 +65,11 @@
             </details>
 
             <!-- 3. LIVE ACTIVITY PANEL (collapsible on mobile) -->
-            <details class="panel panel-activity panel-collapsible" aria-label="Live activity">
-                <summary class="panel-title"><span class="panel-corner">┌─</span> LIVE ACTIVITY <span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┐</span> <span class="collapse-indicator">▸</span></summary>
+            <details class="panel panel-activity panel-collapsible" aria-label="Live activity" open>
+                <summary class="panel-title">
+                    <span class="panel-title-text"><span class="panel-corner">┌─</span> LIVE ACTIVITY <span class="panel-line">────────────────────────────────────</span><span class="panel-corner">┐</span></span>
+                    <button type="button" class="panel-toggle" aria-label="Minimize Live Activity" title="Minimize Live Activity">−</button>
+                </summary>
                 <div class="panel-body panel-scroll">
                     <div class="activity-log" id="activityLog" role="log" aria-live="polite" aria-atomic="false"></div>
                 </div>
@@ -72,7 +78,9 @@
 
             <!-- 4. CONVERSATION PANEL -->
             <section class="panel panel-conversation" aria-label="Conversation">
-                <div class="panel-title"><span class="panel-corner">┌─</span> CONVERSATION <span class="panel-line">──────────────────────────────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-title">
+                    <span class="panel-title-text"><span class="panel-corner">┌─</span> CONVERSATION <span class="panel-line">──────────────────────────────────────────</span><span class="panel-corner">┐</span></span>
+                </div>
                 <div class="panel-body panel-scroll">
                     <main class="chat-area" id="chatArea">
                         <div class="welcome-card" id="welcomeCard">
@@ -86,8 +94,11 @@
             </section>
 
             <!-- 5. TOOLS PANEL (collapsible on mobile) -->
-            <details class="panel panel-tools panel-collapsible" aria-label="Tools">
-                <summary class="panel-title"><span class="panel-corner">┌─</span> TOOLS <span class="panel-line">─────────────────────────────</span><span class="panel-corner">┐</span> <span class="collapse-indicator">▸</span></summary>
+            <details class="panel panel-tools panel-collapsible" aria-label="Tools" open>
+                <summary class="panel-title">
+                    <span class="panel-title-text"><span class="panel-corner">┌─</span> TOOLS <span class="panel-line">─────────────────────────────</span><span class="panel-corner">┐</span></span>
+                    <button type="button" class="panel-toggle" aria-label="Minimize Tools" title="Minimize Tools">−</button>
+                </summary>
                 <div class="panel-body panel-scroll">
                     <ul class="tools-list" id="toolsList" aria-label="Available tools"></ul>
                 </div>
@@ -96,7 +107,10 @@
 
             <!-- 6. APEX STATUS PANEL -->
             <section class="panel panel-apex-status" aria-label="APEX status">
-                <div class="panel-title"><span class="panel-corner">┌─</span> APEX STATUS <span class="panel-line">────────────────────────</span><span class="panel-corner">┐</span></div>
+                <div class="panel-title">
+                    <span class="panel-title-text"><span class="panel-corner">┌─</span> APEX STATUS <span class="panel-line">────────────────────────</span><span class="panel-corner">┐</span></span>
+                    <button type="button" class="panel-toggle" aria-label="Minimize APEX Status" title="Minimize APEX Status">−</button>
+                </div>
                 <div class="panel-body">
                     <div class="apex-status-main">
                         <span class="apex-status-dot" id="apexStatusDot"></span>

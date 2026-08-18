@@ -1512,6 +1512,96 @@ function scrollActivityToBottom() {
         return (APEX_API_BASE || '') + path;
     }
 
+    function updateSecondaryPanelLayout() {
+        const dashboardGrid = document.querySelector('.dashboard-grid');
+        if (!dashboardGrid) {
+            return;
+        }
+
+        const panelState = {};
+        ['system', 'activity', 'tools', 'apex'].forEach(key => {
+            const panel = document.querySelector(`.panel-${key}`);
+            if (!panel) {
+                return;
+            }
+            panelState[key] = !panel.classList.contains('collapsed');
+        });
+
+        const topOpen = ['system', 'activity'].filter(key => panelState[key] !== false);
+        const bottomOpen = ['tools', 'apex'].filter(key => panelState[key] !== false);
+
+        dashboardGrid.style.gridTemplateColumns = '240px 1fr';
+        dashboardGrid.style.gridTemplateAreas = '"system activity" "conversation conversation" "tools status"';
+
+        const topRow = topOpen.length === 2
+            ? 'minmax(120px, 0.9fr)'
+            : 'minmax(42px, auto)';
+
+        const bottomRow = bottomOpen.length === 2
+            ? 'minmax(140px, 1fr)'
+            : 'minmax(42px, auto)';
+
+        dashboardGrid.style.gridTemplateRows = `${topRow} minmax(180px, 1.4fr) ${bottomRow}`;
+    }
+
+    function setPanelCollapsed(panel, collapsed) {
+        if (!panel) {
+            return;
+        }
+
+        panel.classList.toggle('collapsed', collapsed);
+
+        const toggle = panel.querySelector('.panel-toggle');
+        if (toggle) {
+            toggle.textContent = collapsed ? '+' : '−';
+            const label = (panel.getAttribute('aria-label') || 'Panel').trim();
+            toggle.setAttribute('aria-label', collapsed ? `Expand ${label}` : `Minimize ${label}`);
+            toggle.title = collapsed ? `Expand ${label}` : `Minimize ${label}`;
+        }
+
+        if (panel.matches('details')) {
+            panel.open = !collapsed;
+        }
+
+        updateSecondaryPanelLayout();
+    }
+
+    function setupSecondaryPanelToggles() {
+        const panelButtons = document.querySelectorAll('.panel-toggle');
+
+        panelButtons.forEach(button => {
+            const panel = button.closest('.panel');
+            if (!panel) {
+                return;
+            }
+
+            const label = (panel.getAttribute('aria-label') || 'Panel').trim();
+            const isCollapsed = panel.classList.contains('collapsed');
+            button.textContent = isCollapsed ? '+' : '−';
+            button.setAttribute('aria-label', isCollapsed ? `Expand ${label}` : `Minimize ${label}`);
+            button.title = isCollapsed ? `Expand ${label}` : `Minimize ${label}`;
+
+            button.addEventListener('click', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                const nextCollapsed = !panel.classList.contains('collapsed');
+                setPanelCollapsed(panel, nextCollapsed);
+            });
+        });
+
+        document.querySelectorAll('.panel-collapsible').forEach(panel => {
+            if (!panel.matches('details')) {
+                return;
+            }
+
+            const syncFromDetails = () => {
+                setPanelCollapsed(panel, !panel.open);
+            };
+
+            panel.addEventListener('toggle', syncFromDetails);
+            syncFromDetails();
+        });
+    }
 
     // =========================================================
     // STATE MACHINE
@@ -3737,6 +3827,9 @@ function scrollActivityToBottom() {
             chatArea
         );
     }
+
+    setupSecondaryPanelToggles();
+    updateSecondaryPanelLayout();
 
     fetchToolMetadata();
 
