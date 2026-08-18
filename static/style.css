@@ -205,9 +205,12 @@ body {
 
 .panel-toggle {
     appearance: none;
+    -moz-appearance: none;
     -webkit-appearance: none;
     background: rgba(0, 242, 254, 0.04);
     border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 0;
+    box-shadow: none;
     color: var(--text-primary);
     font: inherit;
     font-weight: 700;
@@ -220,6 +223,7 @@ body {
     padding: 0;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
     flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .panel-toggle:hover,
