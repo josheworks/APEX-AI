@@ -112,31 +112,24 @@ def _safe_eval_ast(node):
 # BASIC SYSTEM TOOLS
 # ============================================================
 
-IST = ZoneInfo("Asia/Kolkata")  # or whatever your actual timezone is
+IST = ZoneInfo("Asia/Kolkata")
+
 
 def get_current_time() -> dict:
     now = datetime.now(IST)
     time_str = now.strftime("%I:%M %p").lstrip("0")
-    return {"success": True, "result": f"The current time is {time_str}."}
+    return {
+        "success": True,
+        "result": f"The current time is {time_str}."
+    }
+
 
 def get_current_date() -> dict:
     now = datetime.now(IST)
     date_str = now.strftime("%A, %B %d, %Y")
-    return {"success": True, "result": f"Today is {date_str}."}
-    """
-    Returns current computer local date.
-    """
-
-    now = datetime.now()
-
-    date_str = now.strftime(
-        "%A, %B %d, %Y"
-    )
-
     return {
         "success": True,
-        "result":
-            f"Today is {date_str}."
+        "result": f"Today is {date_str}."
     }
 
 
