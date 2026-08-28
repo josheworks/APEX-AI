@@ -6,4 +6,4 @@ python-multipart>=0.0.9
 openai>=1.0.0
 tzdata
 nvidia-riva-client
-grcpcio
+grpcio
