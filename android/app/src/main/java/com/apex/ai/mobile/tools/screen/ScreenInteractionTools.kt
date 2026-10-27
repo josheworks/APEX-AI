@@ -117,7 +117,7 @@ object ScreenInteractionTools {
 
         val success = service.triggerBack()
         if (success) {
-            ToolExecutionResult.Success("press_back", emptyMap(), "Triggered back navigation")
+            ToolExecutionResult.Success("press_back", emptyMap<String, Any?>(), "Triggered back navigation")
         } else {
             ToolExecutionResult.Failed("press_back", "ACTION_FAILED", "Failed to perform global back action")
         }

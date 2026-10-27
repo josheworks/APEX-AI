@@ -56,7 +56,7 @@ class WorkflowEngine(
             _state.value = WorkflowState.Running(index + 1, definition.steps.size, step.stepId)
             val stepStart = System.currentTimeMillis()
 
-            val tool = toolRegistry.getTool(step.toolName)!
+            val tool = toolRegistry.getTool(step.toolName)!!
 
             // Safety policy check
             val decision = policyEngine.evaluate(context, tool, step.arguments)

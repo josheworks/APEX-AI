@@ -24,3 +24,10 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Android Build Outputs
+.gradle/
+android/.gradle/
+android/app/build/
+android/local.properties
+*.apk
