@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APEX AI</string>
+    <string name="app_subtitle">Advanced Personal Executive</string>
+    <string name="accessibility_service_description">APEX Assistant Screen Navigation service allows APEX to assist with navigating your authorized screen elements when requested.</string>
+</resources>
