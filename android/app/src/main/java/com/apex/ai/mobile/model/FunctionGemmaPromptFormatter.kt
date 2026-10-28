@@ -132,7 +132,12 @@ object FunctionGemmaPromptFormatter {
             val keys = obj.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
-                map[key] = obj.get(key)
+                val value = obj.get(key)
+                map[key] = if (value is String) {
+                    value.replace(ESCAPE_TOKEN, "").trim()
+                } else {
+                    value
+                }
             }
             return map
         } catch (_: Exception) {
