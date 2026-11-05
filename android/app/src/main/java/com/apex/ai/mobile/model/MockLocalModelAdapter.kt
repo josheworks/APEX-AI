@@ -17,6 +17,11 @@ class MockLocalModelAdapter(
     private val _loadingProgress = MutableStateFlow(0f)
     override val loadingProgress: StateFlow<Float> = _loadingProgress.asStateFlow()
 
+    private val _lastError = MutableStateFlow<ModelErrorInfo?>(null)
+    override val lastError: StateFlow<ModelErrorInfo?> = _lastError.asStateFlow()
+
+    override val isMock: Boolean = true
+
     @Volatile
     private var isCancelled = false
 
@@ -194,7 +199,8 @@ class MockLocalModelAdapter(
         return ModelHealth.Healthy(
             ready = _status.value == ModelRuntimeStatus.READY,
             memoryUsedMb = 288L,
-            device = "Mobile Action 270M (Simulated CPU/XNNPACK)"
+            device = "Mock Keyword Adapter (TESTING ONLY - NO REAL AI)",
+            isRealInference = false
         )
     }
 

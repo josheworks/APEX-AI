@@ -31,7 +31,10 @@ class MainActivity : ComponentActivity() {
                     toolRegistry = app.toolRegistry,
                     policyEngine = app.policyEngine,
                     auditLogger = app.auditLogger,
-                    workflowEngine = app.workflowEngine
+                    workflowEngine = app.workflowEngine,
+                    modelImporter = app.modelImporter,
+                    voiceController = app.voiceController,
+                    applicationContext = app.applicationContext
                 ) as T
             }
         }
@@ -45,6 +48,9 @@ class MainActivity : ComponentActivity() {
                 if (currentScreen == "settings") {
                     SettingsScreen(
                         uiState = uiState,
+                        onReloadModel = { viewModel.reloadModel() },
+                        onImportModel = { uri -> viewModel.importModel(uri) },
+                        onUpdateVoiceConfig = { config -> viewModel.updateVoiceConfig(config) },
                         onBack = { currentScreen = "terminal" }
                     )
                 } else {

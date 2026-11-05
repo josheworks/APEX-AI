@@ -1,8 +1,8 @@
 package com.apex.ai.mobile.model
 
 data class ModelConfig(
-    val modelId: String = "google/functiongemma-270m-it",
-    val modelPath: String = "models/functiongemma-270m-it-q8_ekv1024.litertlm",
+    val modelId: String = "litert-community/functiongemma-270m-ft-mobile-actions",
+    val modelPath: String = "models/mobile_actions_q8_ekv1024.litertlm",
     val maxContextLength: Int = 2048,
     val maxOutputTokens: Int = 256,
     val temperature: Float = 0.1f,
@@ -14,6 +14,7 @@ data class ModelConfig(
 
 enum class ModelRuntimeStatus {
     UNINITIALIZED,
+    MODEL_MISSING,
     LOADING,
     READY,
     INFERRING,
@@ -21,10 +22,22 @@ enum class ModelRuntimeStatus {
     ERROR
 }
 
+data class ModelErrorInfo(
+    val code: String,
+    val message: String,
+    val expectedPath: String = "",
+    val resolutionGuide: String = ""
+)
+
 sealed class ModelHealth {
-    data class Healthy(val ready: Boolean, val memoryUsedMb: Long, val device: String) : ModelHealth()
+    data class Healthy(
+        val ready: Boolean,
+        val memoryUsedMb: Long,
+        val device: String,
+        val isRealInference: Boolean = true
+    ) : ModelHealth()
     data class Degraded(val message: String, val memoryUsedMb: Long) : ModelHealth()
-    data class Offline(val reason: String) : ModelHealth()
+    data class Offline(val reason: String, val errorInfo: ModelErrorInfo? = null) : ModelHealth()
 }
 
 data class ToolCallProposal(

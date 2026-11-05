@@ -1,5 +1,9 @@
 package com.apex.ai.mobile.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.apex.ai.mobile.ui.components.CommandBar
 import com.apex.ai.mobile.ui.components.ConfirmationDialog
 import com.apex.ai.mobile.ui.components.LiveActivityPanel
@@ -42,6 +47,27 @@ fun MainTerminalScreen(
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            viewModel.toggleVoiceInput()
+        }
+    }
+
+    val onMicClick: () -> Unit = {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            viewModel.toggleVoiceInput()
+        } else {
+            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     // Auto-scroll to bottom on new messages
     LaunchedEffect(uiState.messages.size, uiState.activeToolName, uiState.lastToolResult) {
@@ -111,10 +137,15 @@ fun MainTerminalScreen(
                 input = uiState.currentInput,
                 onInputChange = viewModel::onInputChange,
                 onSend = { viewModel.sendMessage(context) },
-                onMicClick = viewModel::toggleVoiceInput,
+                onMicClick = onMicClick,
                 isListening = uiState.isListening,
                 isGenerating = uiState.isGenerating,
-                onCancelGeneration = viewModel::cancelGeneration
+                onCancelGeneration = viewModel::cancelGeneration,
+                voiceState = uiState.voiceState,
+                audioLevel = uiState.audioLevel,
+                transcribedVoiceText = uiState.transcribedVoiceText,
+                isSpeaking = uiState.isSpeaking,
+                onStopSpeaking = viewModel::stopSpeaking
             )
         }
 

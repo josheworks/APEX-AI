@@ -30,20 +30,30 @@ object FunctionGemmaPromptFormatter {
         systemInstruction: String,
         toolsDeclarations: List<Map<String, Any?>>,
         history: List<Pair<String, String>>,
-        userPrompt: String
+        userPrompt: String,
+        includeBos: Boolean = false
     ): String {
         val sb = StringBuilder()
-        sb.append(BOS_TOKEN)
+        // LiteRT-LM's tokenizer automatically prepends <bos>.
+        // When running under LiteRT-LM, includeBos must be false to prevent:
+        // "INVALID_ARGUMENT: Input contains bos control token."
+        if (includeBos) {
+            sb.append(BOS_TOKEN)
+        }
 
         // Developer / System turn
         sb.append(START_OF_TURN).append("developer\n")
-        sb.append(systemInstruction.trim())
-        if (toolsDeclarations.isNotEmpty()) {
+        sb.append(systemInstruction.replace(BOS_TOKEN, "").trim())
+
+        // In ekv1024 models, max token sequence length is strictly 1024 tokens.
+        // We select the top relevant candidate tools (max 6) to keep prompt well under 400 tokens.
+        val selectedTools = selectRelevantTools(userPrompt, toolsDeclarations, maxTools = 6)
+        if (selectedTools.isNotEmpty()) {
             sb.append("\nYou are a model that can do function calling with the following functions:")
-            for (tool in toolsDeclarations) {
+            for (tool in selectedTools) {
                 sb.append(START_DECLARATION)
                 val name = tool["name"] as? String ?: "tool"
-                val description = tool["description"] as? String ?: ""
+                val description = ((tool["description"] as? String) ?: "").take(70)
                 sb.append("declaration:").append(name)
                 sb.append("{description:").append(ESCAPE_TOKEN).append(description).append(ESCAPE_TOKEN)
                 sb.append(",parameters:{type:").append(ESCAPE_TOKEN).append("OBJECT").append(ESCAPE_TOKEN).append("}}")
@@ -52,23 +62,76 @@ object FunctionGemmaPromptFormatter {
         }
         sb.append(END_OF_TURN).append("\n")
 
-        // Conversation history (bounded to last 10 turns to respect 1024-2048 token budget)
-        val boundedHistory = if (history.size > 10) history.takeLast(10) else history
+        // Bounded conversation history (last 2 turns, each truncated to 80 chars to protect KV-1024 budget)
+        val boundedHistory = history.takeLast(2)
         for ((role, content) in boundedHistory) {
             val normalizedRole = if (role.equals("user", ignoreCase = true)) "user" else "model"
             sb.append(START_OF_TURN).append(normalizedRole).append("\n")
-            sb.append(content.trim())
+            sb.append(content.replace(BOS_TOKEN, "").trim().take(80))
             sb.append(END_OF_TURN).append("\n")
         }
 
         // Current turn
         sb.append(START_OF_TURN).append("user\n")
-        sb.append(userPrompt.trim())
+        sb.append(userPrompt.replace(BOS_TOKEN, "").trim())
         sb.append(END_OF_TURN).append("\n")
 
         // Cue model turn
         sb.append(START_OF_TURN).append("model\n")
         return sb.toString()
+    }
+
+    /**
+     * Ranks and selects the most relevant tools for a prompt to stay within token budgets.
+     */
+    fun selectRelevantTools(
+        userPrompt: String,
+        allTools: List<Map<String, Any?>>,
+        maxTools: Int = 6
+    ): List<Map<String, Any?>> {
+        if (allTools.size <= maxTools) return allTools
+
+        val promptLower = userPrompt.lowercase()
+        val scored = allTools.map { tool ->
+            val name = (tool["name"] as? String ?: "").lowercase()
+            val desc = (tool["description"] as? String ?: "").lowercase()
+            var score = 0
+
+            val keywords = when {
+                name.contains("battery") -> listOf("battery", "charge", "percentage", "power")
+                name.contains("app") -> listOf("app", "open", "launch", "start", "whatsapp", "youtube", "chrome")
+                name.contains("flashlight") || name.contains("torch") -> listOf("torch", "flashlight", "light", "flash")
+                name.contains("photo") || name.contains("camera") -> listOf("photo", "camera", "picture", "shoot", "capture")
+                name.contains("wifi") -> listOf("wifi", "wi-fi", "internet", "network")
+                name.contains("bluetooth") -> listOf("bluetooth", "bt")
+                name.contains("volume") -> listOf("volume", "sound", "louder", "quieter")
+                name.contains("whatsapp") -> listOf("whatsapp", "message", "chat", "send")
+                name.contains("settings") -> listOf("setting", "settings", "configure", "config")
+                else -> listOf(name.replace("_", " "))
+            }
+
+            for (kw in keywords) {
+                if (promptLower.contains(kw)) {
+                    score += 5
+                }
+            }
+
+            val promptTokens = promptLower.split(Regex("\\s+"))
+            for (token in promptTokens) {
+                if (token.length > 2) {
+                    if (name.contains(token)) score += 3
+                    if (desc.contains(token)) score += 1
+                }
+            }
+
+            if (name in setOf("open_app", "get_battery_status", "toggle_flashlight", "take_photo", "open_device_settings")) {
+                score += 1
+            }
+
+            Pair(tool, score)
+        }
+
+        return scored.sortedByDescending { it.second }.take(maxTools).map { it.first }
     }
 
     fun parseOutput(rawOutput: String): Pair<String, List<ToolCallProposal>> {
@@ -80,14 +143,14 @@ object FunctionGemmaPromptFormatter {
 
         while (matcher.find()) {
             foundMatches = true
-            val toolName = matcher.group(1).trim()
-            val argsBody = matcher.group(2).trim()
+            val toolName = matcher.group(1)?.trim() ?: ""
+            val argsBody = matcher.group(2)?.trim() ?: ""
             val arguments = parseArguments(argsBody)
             toolCalls.add(
                 ToolCallProposal(
                     toolName = toolName,
                     arguments = arguments,
-                    rawCallText = matcher.group(0)
+                    rawCallText = matcher.group(0) ?: ""
                 )
             )
         }
@@ -96,14 +159,14 @@ object FunctionGemmaPromptFormatter {
             // Check fallback without control tokens if raw call:name{} occurred
             matcher = SIMPLE_CALL_REGEX.matcher(trimmed)
             while (matcher.find()) {
-                val toolName = matcher.group(1).trim()
-                val argsBody = matcher.group(2).trim()
+                val toolName = matcher.group(1)?.trim() ?: ""
+                val argsBody = matcher.group(2)?.trim() ?: ""
                 val arguments = parseArguments(argsBody)
                 toolCalls.add(
                     ToolCallProposal(
                         toolName = toolName,
                         arguments = arguments,
-                        rawCallText = matcher.group(0)
+                        rawCallText = matcher.group(0) ?: ""
                     )
                 )
             }

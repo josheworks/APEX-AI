@@ -26,28 +26,47 @@ class ToolRegistry {
         handlers[metadata.name] = handler
     }
 
-    fun getTool(name: String): ToolMetadata? = tools[name]
+    private fun canonicalName(name: String): String {
+        return when (name.lowercase().trim()) {
+            "check_battery", "battery_status", "get_battery", "check_battery_status" -> "get_battery_status"
+            "launch_app", "start_app", "run_app" -> "open_app"
+            "torch", "torch_on", "torch_off", "flashlight", "turn_flashlight", "turn_on_flashlight", "turn_off_flashlight", "set_flashlight", "flashlight_on", "flashlight_off" -> "toggle_flashlight"
+            "capture_photo", "camera_photo", "take_picture" -> "take_photo"
+            "wifi_settings", "open_wifi" -> "open_wifi_settings"
+            "bluetooth_settings", "open_bluetooth" -> "open_bluetooth_settings"
+            else -> name
+        }
+    }
+
+    fun getTool(name: String): ToolMetadata? {
+        val canonical = canonicalName(name)
+        return tools[name] ?: tools[canonical]
+    }
 
     fun getAllTools(): List<ToolMetadata> = tools.values.toList()
 
-    fun hasTool(name: String): Boolean = tools.containsKey(name)
+    fun hasTool(name: String): Boolean {
+        val canonical = canonicalName(name)
+        return tools.containsKey(name) || tools.containsKey(canonical)
+    }
 
     suspend fun executeTool(context: Context, name: String, arguments: Map<String, Any?>): ToolExecutionResult {
-        val metadata = tools[name] ?: return ToolExecutionResult.Failed(
+        val targetName = if (tools.containsKey(name)) name else canonicalName(name)
+        val metadata = tools[targetName] ?: return ToolExecutionResult.Failed(
             name,
             "TOOL_NOT_FOUND",
             "Tool '$name' is not registered in APEX Mobile registry."
         )
 
-        val handler = handlers[name] ?: return ToolExecutionResult.Unsupported(
-            name,
-            "Tool '$name' does not have an active handler on this platform."
+        val handler = handlers[targetName] ?: return ToolExecutionResult.Unsupported(
+            targetName,
+            "Tool '$targetName' does not have an active handler on this platform."
         )
 
         return try {
             handler.execute(context, arguments)
         } catch (e: Exception) {
-            ToolExecutionResult.Failed(name, "EXECUTION_EXCEPTION", e.message ?: "Unknown handler exception", e)
+            ToolExecutionResult.Failed(targetName, "EXECUTION_EXCEPTION", e.message ?: "Unknown handler exception", e)
         }
     }
 
@@ -242,7 +261,7 @@ class ToolRegistry {
                 risk = ToolRisk.LOW,
                 confirmation = ConfirmationPolicy.NEVER,
                 parametersSchema = mapOf(
-                    "enabled" to ParameterDefinition(ParameterType.BOOLEAN, "True to turn on, false to turn off", required = true)
+                    "enabled" to ParameterDefinition(ParameterType.BOOLEAN, "True to turn on, false to turn off", required = false)
                 )
             ),
             CameraMediaTools.toggleFlashlightHandler

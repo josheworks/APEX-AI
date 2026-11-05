@@ -14,6 +14,11 @@ import com.apex.ai.mobile.policy.PolicyEngine
 import com.apex.ai.mobile.registry.ToolExecutionResult
 import com.apex.ai.mobile.registry.ToolRegistry
 import com.apex.ai.mobile.ui.components.ChatMessage
+import com.apex.ai.mobile.voice.DetectedInputLanguage
+import com.apex.ai.mobile.voice.TranscriptionNormalizer
+import com.apex.ai.mobile.voice.VoiceAssistantConfig
+import com.apex.ai.mobile.voice.VoiceAssistantController
+import com.apex.ai.mobile.voice.VoiceState
 import com.apex.ai.mobile.workflow.WorkflowEngine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +35,10 @@ class ApexViewModel(
     private val toolRegistry: ToolRegistry,
     private val policyEngine: PolicyEngine,
     private val auditLogger: AuditLogger,
-    private val workflowEngine: WorkflowEngine
+    private val workflowEngine: WorkflowEngine,
+    private val modelImporter: com.apex.ai.mobile.model.ModelImporter,
+    private val voiceController: VoiceAssistantController? = null,
+    private val applicationContext: Context? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -44,7 +52,21 @@ class ApexViewModel(
         // Collect model status
         viewModelScope.launch {
             modelAdapter.status.collect { status ->
-                _uiState.update { it.copy(modelStatus = status, modelHealth = modelAdapter.checkHealth()) }
+                val health = modelAdapter.checkHealth()
+                val activePath = (modelAdapter as? com.apex.ai.mobile.model.LiteRTLocalModelAdapter)?.getActiveModelFile()?.absolutePath
+                _uiState.update { it.copy(modelStatus = status, modelHealth = health, activeModelPath = activePath) }
+            }
+        }
+        // Collect model errors & diagnostics
+        viewModelScope.launch {
+            modelAdapter.lastError.collect { errInfo ->
+                _uiState.update { it.copy(modelErrorInfo = errInfo) }
+            }
+        }
+        // Collect model import status
+        viewModelScope.launch {
+            modelImporter.importStatus.collect { importStatus ->
+                _uiState.update { it.copy(modelImportStatus = importStatus) }
             }
         }
         // Collect audit records
@@ -59,9 +81,79 @@ class ApexViewModel(
                 _uiState.update { it.copy(workflowState = wfState) }
             }
         }
-        // Initialize model
+
+        // Collect voice pipeline states
+        voiceController?.let { vc ->
+            viewModelScope.launch {
+                vc.voiceState.collect { state ->
+                    _uiState.update {
+                        it.copy(
+                            voiceState = state,
+                            isListening = (state == VoiceState.LISTENING)
+                        )
+                    }
+                }
+            }
+            viewModelScope.launch {
+                vc.audioRecorder.audioLevel.collect { level: Float ->
+                    _uiState.update { it.copy(audioLevel = level) }
+                }
+            }
+            viewModelScope.launch {
+                vc.currentTranscription.collect { text ->
+                    _uiState.update { it.copy(transcribedVoiceText = text) }
+                }
+            }
+            viewModelScope.launch {
+                vc.ttsManager.isSpeaking.collect { speaking ->
+                    _uiState.update { it.copy(isSpeaking = speaking) }
+                }
+            }
+            viewModelScope.launch {
+                vc.ttsManager.availableVoices.collect { voices ->
+                    _uiState.update { it.copy(availableVoices = voices) }
+                }
+            }
+            viewModelScope.launch {
+                vc.config.collect { cfg ->
+                    _uiState.update { it.copy(voiceConfig = cfg) }
+                }
+            }
+
+            // Wire callback for voice command recognition
+            vc.onCommandRecognized = { normalizedText, detectedLang ->
+                handleVoiceTurn(normalizedText, detectedLang)
+            }
+        }
+        // Initialize model at startup
         viewModelScope.launch {
-            modelAdapter.initialize(ModelConfig())
+            val initResult = modelAdapter.initialize(ModelConfig())
+            initResult.onSuccess {
+                val startupNotice = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = if (modelAdapter.isMock) {
+                        "[MOCK MODE] Running with test keywords adapter."
+                    } else {
+                        "APEX Mobile On-Device AI Engine is ONLINE. FunctionGemma 270M loaded via LiteRT."
+                    },
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + startupNotice) }
+            }.onFailure {
+                val errInfo = _uiState.value.modelErrorInfo
+                val notice = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = "APEX Mobile Real Local AI initialized.\n\n" +
+                            "[!] FunctionGemma on-device model is not yet imported.\n" +
+                            "Target filename: mobile_actions_q8_ekv1024.litertlm\n" +
+                            "Expected path:\n${errInfo?.expectedPath ?: "files/models/mobile_actions_q8_ekv1024.litertlm"}\n\n" +
+                            "Go to Settings -> 'IMPORT MODEL FROM DOWNLOADS' to select it with the file picker, or transfer it to app storage.",
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + notice) }
+            }
         }
     }
 
@@ -119,10 +211,24 @@ class ApexViewModel(
                     processToolProposal(context, proposal)
                 }
             }.onFailure { err ->
+                val errorInfo = _uiState.value.modelErrorInfo
+                val contentText = when (_uiState.value.modelStatus) {
+                    ModelRuntimeStatus.MODEL_MISSING ->
+                        "[MODEL NOT FOUND] FunctionGemma 270M weights file is missing.\n\n" +
+                        "Expected path:\n${errorInfo?.expectedPath ?: "models/functiongemma-270m-it-q8_ekv1024.litertlm"}\n\n" +
+                        "Transfer the model file into that folder on your device and tap 'CHECK / RELOAD LOCAL MODEL' in Settings."
+                    ModelRuntimeStatus.ERROR ->
+                        "[INFERENCE ERROR] ${errorInfo?.code ?: "ENGINE_ERROR"}: ${err.message}\n" +
+                        (errorInfo?.resolutionGuide ?: "Please inspect device logs or check model file compatibility.")
+                    ModelRuntimeStatus.LOADING ->
+                        "[MODEL LOADING] Model weights are currently being loaded into memory. Please wait a moment."
+                    else ->
+                        "System notice: ${err.message ?: "Unable to complete request"}"
+                }
                 val errorMsg = ChatMessage(
                     id = UUID.randomUUID().toString(),
                     sender = "apex",
-                    content = "System notice: ${err.message ?: "Unable to complete request"}",
+                    content = contentText,
                     timestamp = currentTimeString()
                 )
                 _uiState.update { it.copy(messages = it.messages + errorMsg) }
@@ -244,7 +350,7 @@ class ApexViewModel(
         context: Context,
         toolName: String,
         arguments: Map<String, Any?>
-    ) {
+    ): ToolExecutionResult {
         _uiState.update { it.copy(activeToolName = toolName, isToolExecuting = true) }
         val startTime = System.currentTimeMillis()
 
@@ -277,6 +383,107 @@ class ApexViewModel(
             )
             _uiState.update { it.copy(messages = it.messages + feedbackMsg) }
         }
+
+        return result
+    }
+
+    /**
+     * Handles an incoming voice turn recognized from English, Tamil or Tanglish speech.
+     * Normalized canonical text is sent through FunctionGemma 270M and Safe Tool Registry.
+     * Crucially, the response returned and spoken by TTS is ALWAYS in natural English.
+     */
+    private suspend fun handleVoiceTurn(
+        normalizedText: String,
+        detectedLang: DetectedInputLanguage
+    ): String {
+        val context = applicationContext ?: com.apex.ai.mobile.ApexApplication.instance
+        val userMsg = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            sender = "user",
+            content = normalizedText,
+            timestamp = currentTimeString()
+        )
+        _uiState.update {
+            it.copy(
+                messages = it.messages + userMsg,
+                isGenerating = true
+            )
+        }
+
+        val history = _uiState.value.messages.takeLast(10).map { Pair(it.sender, it.content) }
+        val toolsDeclarations = toolRegistry.getAllTools().map {
+            mapOf("name" to it.name, "description" to it.description)
+        }
+
+        val request = GenerationRequest(
+            prompt = normalizedText,
+            conversationHistory = history,
+            availableTools = toolsDeclarations
+        )
+
+        val genResult = modelAdapter.generate(request)
+        _uiState.update { it.copy(isGenerating = false) }
+
+        var spokenResponse = ""
+
+        genResult.onSuccess { result ->
+            if (result.text.isNotBlank()) {
+                val apexMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = result.text,
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + apexMsg) }
+                spokenResponse = result.text
+            }
+
+            // Execute proposed tools through policy engine
+            for (proposal in result.toolCalls) {
+                val tool = toolRegistry.getTool(proposal.toolName)
+                if (tool == null) {
+                    spokenResponse = "Tool ${proposal.toolName} was not found."
+                    continue
+                }
+                val decision = policyEngine.evaluate(context, tool, proposal.arguments)
+                when (decision) {
+                    is PolicyDecision.Allow -> {
+                        val execResult = executeVerifiedTool(context, tool.name, decision.sanitizedArguments)
+                        spokenResponse = TranscriptionNormalizer.formatSpokenResponse(execResult)
+                    }
+                    is PolicyDecision.RequireConfirmation -> {
+                        _uiState.update {
+                            it.copy(
+                                pendingConfirmation = decision.pendingConfirmation,
+                                activeToolName = tool.name,
+                                lastToolResult = ToolExecutionResult.ConfirmationRequired(
+                                    toolName = tool.name,
+                                    pendingActionId = decision.pendingConfirmation.actionId,
+                                    arguments = decision.pendingConfirmation.arguments,
+                                    summary = decision.pendingConfirmation.targetSummary,
+                                    consequences = decision.pendingConfirmation.consequences
+                                )
+                            )
+                        }
+                        spokenResponse = "This action requires your confirmation on screen."
+                    }
+                    is PolicyDecision.PermissionRequired -> {
+                        spokenResponse = "Permission is required to execute ${tool.name}."
+                    }
+                    is PolicyDecision.Reject -> {
+                        spokenResponse = "Action was blocked: ${decision.reason}."
+                    }
+                }
+            }
+        }.onFailure { err ->
+            spokenResponse = "Sorry, I couldn't complete that command."
+        }
+
+        if (spokenResponse.isBlank()) {
+            spokenResponse = "Command processed."
+        }
+
+        return spokenResponse
     }
 
     fun cancelGeneration() {
@@ -285,7 +492,85 @@ class ApexViewModel(
     }
 
     fun toggleVoiceInput() {
-        _uiState.update { it.copy(isListening = !it.isListening) }
+        if (voiceController != null) {
+            voiceController.toggleListening()
+        } else {
+            _uiState.update { it.copy(isListening = !it.isListening) }
+        }
+    }
+
+    fun stopSpeaking() {
+        voiceController?.stopSpeaking()
+    }
+
+    fun updateVoiceConfig(config: VoiceAssistantConfig) {
+        voiceController?.updateConfig(config)
+    }
+
+    fun reloadModel() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isGenerating = true) }
+            val result = modelAdapter.initialize(ModelConfig())
+            _uiState.update { it.copy(isGenerating = false) }
+
+            result.onSuccess {
+                val feedback = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = if (modelAdapter.isMock) {
+                        "[MOCK ENGINE] Test adapter reloaded."
+                    } else {
+                        "SUCCESS: Real LiteRT engine initialized with FunctionGemma 270M weights."
+                    },
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + feedback) }
+            }.onFailure { err ->
+                val errInfo = _uiState.value.modelErrorInfo
+                val feedback = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = "RELOAD FAILED: ${err.message}\nExpected path:\n${errInfo?.expectedPath ?: ""}",
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + feedback) }
+            }
+        }
+    }
+
+    fun importModel(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = modelImporter.importModelFromUri(
+                sourceUri = uri,
+                targetFileName = "mobile_actions_q8_ekv1024.litertlm"
+            )
+
+            result.onSuccess { importedFile ->
+                val sizeMb = importedFile.length() / (1024 * 1024)
+                val successMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = "SUCCESS: Model imported ($sizeMb MB).\nFile: ${importedFile.name}\nPath: ${importedFile.absolutePath}\n\nInitializing on-device LiteRT inference engine...",
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + successMsg) }
+
+                // Automatically reload model to initialize the real LiteRT engine with the imported weights
+                reloadModel()
+            }.onFailure { err ->
+                val failMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    sender = "apex",
+                    content = "MODEL IMPORT FAILED: ${err.message}",
+                    timestamp = currentTimeString()
+                )
+                _uiState.update { it.copy(messages = it.messages + failMsg) }
+            }
+        }
+    }
+
+    fun resetImportStatus() {
+        modelImporter.resetStatus()
     }
 
     private fun currentTimeString(): String {
