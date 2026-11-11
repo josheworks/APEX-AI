@@ -27,6 +27,18 @@ load_dotenv()
 MAX_CONVERSATION_MESSAGES = 20
 MAX_TOOL_ROUNDS = 5
 
+CHAT_PROVIDER_TIMEOUT_SECONDS = float(
+    os.getenv(
+        "CHAT_PROVIDER_TIMEOUT_SECONDS",
+        "2"
+    )
+)
+
+if CHAT_PROVIDER_TIMEOUT_SECONDS <= 0:
+    raise ValueError(
+        f"CHAT_PROVIDER_TIMEOUT_SECONDS must be positive, got {CHAT_PROVIDER_TIMEOUT_SECONDS}"
+    )
+
 
 # ============================================================
 # CONVERSATION HISTORY
@@ -109,7 +121,8 @@ class QuotaExhaustedException(Exception):
 # CLIENTS
 # ============================================================
 
-def _get_groq_client() -> OpenAI:
+def _get_groq_client(timeout=None):
+
     api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
@@ -117,13 +130,21 @@ def _get_groq_client() -> OpenAI:
             "GROQ_API_KEY is not configured."
         )
 
+    options = {}
+
+    if timeout is not None:
+        options["timeout"] = timeout
+        options["max_retries"] = 0
+
     return OpenAI(
         api_key=api_key,
-        base_url="https://api.groq.com/openai/v1"
+        base_url="https://api.groq.com/openai/v1",
+        **options
     )
 
 
-def _get_openrouter_client() -> OpenAI:
+def _get_openrouter_client(timeout=None):
+
     api_key = os.getenv("OPENROUTER_API_KEY")
 
     if not api_key:
@@ -131,9 +152,16 @@ def _get_openrouter_client() -> OpenAI:
             "OPENROUTER_API_KEY is not configured."
         )
 
+    options = {}
+
+    if timeout is not None:
+        options["timeout"] = timeout
+        options["max_retries"] = 0
+
     return OpenAI(
         api_key=api_key,
-        base_url="https://openrouter.ai/api/v1"
+        base_url="https://openrouter.ai/api/v1",
+        **options
     )
 
 
@@ -682,14 +710,11 @@ def _run_openai_compatible_tool_loop(
 # OPENROUTER CHAT
 # ============================================================
 
-def _ask_openrouter(
-    user_message: str
-):
-    """
-    PRIMARY CHAT PROVIDER.
-    """
+def _ask_openrouter(user_message: str):
 
-    client = _get_openrouter_client()
+    client = _get_openrouter_client(
+        timeout=CHAT_PROVIDER_TIMEOUT_SECONDS
+    )
 
     model = os.getenv(
         "OPENROUTER_MODEL",
@@ -707,18 +732,15 @@ def _ask_openrouter(
 # GROQ CHAT
 # ============================================================
 
-def _ask_groq(
-    user_message: str
-):
-    """
-    SECOND CHAT PROVIDER.
-    """
+def _ask_groq(user_message: str):
 
-    client = _get_groq_client()
+    client = _get_groq_client(
+        timeout=CHAT_PROVIDER_TIMEOUT_SECONDS
+    )
 
     model = os.getenv(
-        "GROQ_MODEL",
-        "llama-3.3-70b-versatile"
+        "GROQ_LLM_MODEL",
+        "openai/gpt-oss-120b"
     )
 
     return _run_openai_compatible_tool_loop(
@@ -744,7 +766,12 @@ def _ask_gemini(
     )
 
     client = genai.Client(
-        api_key=api_key
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=int(
+                CHAT_PROVIDER_TIMEOUT_SECONDS * 1000
+            )
+        )
     )
 
     return _run_gemini_tool_loop(
@@ -986,28 +1013,11 @@ def _get_chat_providers():
     ]
 
 
-def _fallback_chat_response(
-    user_message: str
-):
-    """
-    Provider priority:
-
-        OpenRouter
-            ↓
-        Groq
-            ↓
-        Gemini
-
-    Any provider error triggers the next provider.
-    """
+def _fallback_chat_response(user_message: str):
 
     errors = []
 
-
-    for (
-        provider_name,
-        provider_function
-    ) in _get_chat_providers():
+    for provider_name, provider_function in _get_chat_providers():
 
         try:
 
@@ -1016,35 +1026,38 @@ def _fallback_chat_response(
                 f"{provider_name}"
             )
 
-
-            response = (
-                provider_function(
-                    user_message
-                )
-            )
-
+            response = provider_function(user_message)
 
             print(
                 f"[APEX] Chat provider succeeded: "
                 f"{provider_name}"
             )
 
-
             return response
-
 
         except Exception as error:
 
-            print(
-                f"[APEX] {provider_name} failed: "
-                f"{error}"
-            )
+            error_name = type(error).__name__
 
+            if (
+                "timeout" in str(error).lower()
+                or "timeout" in error_name.lower()
+            ):
+                print(
+                    f"[APEX] {provider_name} "
+                    f"timed out after "
+                    f"{CHAT_PROVIDER_TIMEOUT_SECONDS}s"
+                )
+
+            else:
+                print(
+                    f"[APEX] {provider_name} failed: "
+                    f"{error}"
+                )
 
             errors.append(
                 f"{provider_name}: {error}"
             )
-
 
     raise RuntimeError(
         "All chat providers failed.\n"
